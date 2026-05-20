@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  .bg-dashboard {
+    background-image: url('/images/bg_mesh_gradient.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }
+  .bg-products {
+    background-image: url('/images/bg_products.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }
+  .bg-finance {
+    background-image: url('/images/bg_finance.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }
+  .bg-people {
+    background-image: url('/images/bg_people.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }
+}
