@@ -5,7 +5,6 @@ import { validatePhone } from '../../utils/validators';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
-import Loader from '../../components/common/Loader';
 
 const SupplierList = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -179,33 +178,27 @@ const SupplierList = () => {
     }
   ];
 
-  if (loading && suppliers.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Suppliers</h1>
-        <p className="text-gray-600">Manage your suppliers</p>
+    <div className="space-y-6">
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Suppliers Base</h1>
+        <p className="text-slate-500 text-xs md:text-sm">Manage inventory distributors, contract contacts, and tax IDs (GST).</p>
       </div>
 
       {/* Form Section */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 className="text-lg font-semibold mb-4">{isEditing ? 'Edit Supplier' : 'Add New Supplier'}</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
+          {isEditing ? '⚡ Edit Supplier details' : '➕ Register New Supplier'}
+        </h2>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
               label="Supplier Name"
               type="text"
               name="name"
               value={formData.name}
               onChange={handleFormChange}
-              placeholder="Enter supplier name"
+              placeholder="e.g. Mahadhan Ltd"
               required
             />
 
@@ -215,7 +208,7 @@ const SupplierList = () => {
               name="contact"
               value={formData.contact}
               onChange={handleFormChange}
-              placeholder="Enter contact person name"
+              placeholder="e.g. Anand Kulkarni"
               required
             />
 
@@ -225,49 +218,49 @@ const SupplierList = () => {
               name="phone"
               value={formData.phone}
               onChange={handleFormChange}
-              placeholder="Enter phone number"
+              placeholder="e.g. 9876543210"
               required
               error={fieldErrors.phone}
             />
 
             <Input
-              label="Email"
+              label="Email Address"
               type="email"
               name="email"
               value={formData.email}
               onChange={handleFormChange}
-              placeholder="Enter email address"
+              placeholder="supplier@domain.com"
               required
             />
           </div>
 
-          <div className="mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <Input
-              label="GST Number"
+              label="GST Number (Tax ID)"
               type="text"
               name="gst"
               value={formData.gst}
               onChange={handleFormChange}
-              placeholder="Enter GST number"
+              placeholder="e.g. 27AAAAA1111A1Z1"
             />
           </div>
 
-          <div className="mt-4">
-            <label className="block text-gray-700 text-sm font-medium mb-2">
-              Address <span className="text-red-500">*</span>
+          <div className="mt-4 flex flex-col gap-1.5">
+            <label className="text-slate-700 text-xs font-semibold uppercase tracking-wider">
+              Complete Address <span className="text-rose-500 ml-1">*</span>
             </label>
             <textarea
               name="address"
               value={formData.address}
               onChange={handleFormChange}
-              placeholder="Enter complete address"
+              placeholder="Enter building, street, city..."
               rows="2"
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full px-3.5 py-2.5 bg-white text-sm text-slate-800 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all hover:border-slate-300"
             />
           </div>
 
-          <div className="flex gap-3 mt-4">
+          <div className="flex gap-2.5 mt-6 border-t border-slate-100 pt-4">
             <Button type="submit" variant="primary" disabled={formLoading}>
               {formLoading ? 'Saving...' : isEditing ? 'Update Supplier' : 'Add Supplier'}
             </Button>
@@ -285,11 +278,12 @@ const SupplierList = () => {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Supplier List</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft space-y-4">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Supplier Directory</h2>
         <Table 
           columns={columns} 
           data={suppliers} 
+          loading={loading}
           onEdit={handleEdit} 
           onDelete={handleDelete} 
           pagination={pagination} 

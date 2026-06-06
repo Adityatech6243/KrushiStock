@@ -12,31 +12,95 @@ body {
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 @layer utilities {
   .bg-dashboard {
-    background-image: url('/images/bg_mesh_gradient.png');
-    background-size: cover;
-    background-position: center;
+    background: radial-gradient(at 0% 0%, rgba(220, 252, 231, 0.5) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(240, 253, 244, 0.6) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(248, 250, 252, 1) 0px, transparent 50%),
+                #f8fafc;
     background-attachment: fixed;
   }
   .bg-products {
-    background-image: url('/images/bg_products.png');
-    background-size: cover;
-    background-position: center;
+    background: radial-gradient(at 0% 0%, rgba(219, 234, 254, 0.5) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(240, 253, 244, 0.6) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(248, 250, 252, 1) 0px, transparent 50%),
+                #f8fafc;
     background-attachment: fixed;
   }
   .bg-finance {
-    background-image: url('/images/bg_finance.png');
-    background-size: cover;
-    background-position: center;
+    background: radial-gradient(at 0% 0%, rgba(220, 252, 231, 0.5) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(254, 243, 199, 0.4) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(248, 250, 252, 1) 0px, transparent 50%),
+                #f8fafc;
     background-attachment: fixed;
   }
   .bg-people {
-    background-image: url('/images/bg_people.png');
-    background-size: cover;
-    background-position: center;
+    background: radial-gradient(at 0% 0%, rgba(243, 232, 255, 0.5) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(220, 252, 231, 0.5) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(248, 250, 252, 1) 0px, transparent 50%),
+                #f8fafc;
     background-attachment: fixed;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .invoice-print-root,
+  .invoice-print-root * {
+    visibility: visible !important;
+  }
+
+  .invoice-print-root {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    color: #0f172a !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .invoice-print-root table {
+    page-break-inside: auto;
+  }
+
+  .invoice-print-root tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
   }
 }

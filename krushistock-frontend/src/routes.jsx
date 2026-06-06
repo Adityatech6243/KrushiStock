@@ -18,6 +18,10 @@ import SalesReport from './pages/reports/SalesReport';
 import PurchaseReport from './pages/reports/PurchaseReport';
 import UserList from './pages/users/UserList';
 import Settings from './pages/settings/Settings';
+import ExpiryManagement from './pages/dashboard/ExpiryManagement';
+import WasteAnalytics from './pages/dashboard/WasteAnalytics';
+import RecommendationsDashboard from './pages/dashboard/RecommendationsDashboard';
+import FarmerRecommendations from './pages/dashboard/FarmerRecommendations';
 
 const ProtectedRoute = ({ children }) => {
   return isAuthenticated() ? children : <Navigate to="/login" />;
@@ -31,6 +35,10 @@ const AppRoutes = () => {
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="dashboard/expiry-management" element={<ExpiryManagement />} />
+        <Route path="dashboard/waste-analytics" element={<WasteAnalytics />} />
+        <Route path="dashboard/recommendations" element={<RecommendationsDashboard />} />
+        <Route path="dashboard/farmers/:id/recommendations" element={<FarmerRecommendations />} />
         
         <Route path="categories" element={<CategoryList />} />
         

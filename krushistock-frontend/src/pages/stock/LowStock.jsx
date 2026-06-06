@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getLowStockProducts } from '../../services/stockService';
 import Table from '../../components/common/Table';
-import Loader from '../../components/common/Loader';
 import { formatNumber } from '../../utils/helpers';
+import { AlertTriangle, CheckCircle2, Phone, ShoppingCart } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const LowStock = () => {
   const [lowStockItems, setLowStockItems] = useState([]);
@@ -35,9 +36,9 @@ const LowStock = () => {
       header: 'Product',
       accessor: 'product',
       render: (row) => (
-        <div>
-          <div className="font-medium">{row.product?.name}</div>
-          <div className="text-xs text-gray-500">{row.product?.category?.name}</div>
+        <div className="flex flex-col">
+          <div className="font-semibold text-slate-800 text-sm">{row.product?.name}</div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{row.product?.category?.name}</div>
         </div>
       )
     },
@@ -45,23 +46,29 @@ const LowStock = () => {
       header: 'Current Stock',
       accessor: 'currentStock',
       render: (row) => (
-        <span className="text-red-600 font-medium">
-          {formatNumber(row.currentStock)} {row.unit}
+        <span className="text-rose-600 font-bold text-sm bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+          {formatNumber(row.currentStock)} <span className="text-[10px] text-rose-500 font-semibold">{row.unit}</span>
         </span>
       )
     },
     {
       header: 'Reorder Level',
       accessor: 'reorderLevel',
-      render: (row) => `${formatNumber(row.reorderLevel)} ${row.unit}`
+      render: (row) => (
+        <span className="font-semibold text-slate-600 text-sm">
+          {formatNumber(row.reorderLevel)} <span className="text-xs text-slate-400 font-medium">{row.unit}</span>
+        </span>
+      )
     },
     {
       header: 'Supplier',
       accessor: 'supplier',
       render: (row) => (
-        <div>
-          <div>{row.supplier?.name}</div>
-          <div className="text-xs text-gray-500">{row.supplier?.phone}</div>
+        <div className="flex flex-col">
+          <div className="text-slate-800 font-semibold text-xs">{row.supplier?.name}</div>
+          <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+            <Phone size={10} /> {row.supplier?.phone}
+          </div>
         </div>
       )
     },
@@ -70,55 +77,65 @@ const LowStock = () => {
       accessor: 'action',
       render: (row) => {
         if (row.currentStock === 0) {
-          return <span className="text-xs px-3 py-1 bg-red-100 text-red-700 rounded-full font-bold shadow-sm inline-block">Out of Stock - Urgent!</span>;
+          return <span className="text-[10px] px-2.5 py-0.5 bg-rose-100 text-rose-800 border border-rose-200 rounded-full font-bold shadow-sm inline-block">Out of Stock - Urgent!</span>;
         } else if (row.currentStock <= row.reorderLevel / 2) {
-          return <span className="text-xs px-3 py-1 bg-orange-100 text-orange-700 rounded-full font-semibold shadow-sm inline-block">Critical Shortage</span>;
+          return <span className="text-[10px] px-2.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-full font-bold shadow-sm inline-block">Critical Shortage</span>;
         } else {
-          return <span className="text-xs px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full font-medium shadow-sm inline-block">Low Stock - Restock</span>;
+          return <span className="text-[10px] px-2.5 py-0.5 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-full font-bold shadow-sm inline-block">Low Stock - Restock</span>;
         }
       }
     }
   ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Low Stock Alert</h1>
-        <p className="text-gray-600">Products that need to be reordered</p>
+    <div className="space-y-6">
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Low Stock Alerts</h1>
+        <p className="text-slate-500 text-xs md:text-sm">Products that have fallen below reorder levels and require restocking.</p>
       </div>
 
-      {lowStockItems.length > 0 ? (
-        <>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">⚠️</span>
+      {loading || lowStockItems.length > 0 ? (
+        <div className="space-y-6 animate-fadeIn">
+          {lowStockItems.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+              <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                <AlertTriangle size={18} className="stroke-[2.5]" />
+              </div>
               <div>
-                <h3 className="font-semibold text-yellow-800">
-                  {lowStockItems.length} products need immediate attention
+                <h3 className="font-bold text-amber-900 text-sm">
+                  {lowStockItems.length} products require restocking attention
                 </h3>
-                <p className="text-sm text-yellow-700">
-                  Please contact suppliers to restock these items
+                <p className="text-xs text-amber-700 font-medium mt-0.5">
+                  Immediate contact with suppliers is recommended to maintain business continuity.
                 </p>
               </div>
             </div>
+          )}
+          
+          <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Alert Logs</h2>
+              <Link 
+                to="/purchases"
+                className="flex items-center gap-1.5 text-xs font-bold text-primary-700 bg-primary-50 border border-primary-150 px-3 py-1.5 rounded-lg hover:bg-primary-100 transition-colors"
+              >
+                <ShoppingCart size={13} /> Order Stock Now
+              </Link>
+            </div>
+            <Table columns={columns} data={lowStockItems} loading={loading} pagination={pagination} onPageChange={handlePageChange} />
           </div>
-          <Table columns={columns} data={lowStockItems} pagination={pagination} onPageChange={handlePageChange} />
-        </>
+        </div>
       ) : (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="text-6xl mb-4">✅</div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">
-            All Stock Levels are Good
+        <div className="bg-white border border-slate-100 rounded-xl shadow-soft p-12 text-center max-w-lg mx-auto animate-fadeIn mt-10">
+          <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-100">
+            <CheckCircle2 size={30} className="stroke-[2.2]" />
+          </div>
+          <h3 className="text-lg font-black text-slate-800 tracking-tight">
+            Inventory Levels Stable
           </h3>
-          <p className="text-gray-600">No products require immediate reordering</p>
+          <p className="text-xs text-slate-400 font-medium mt-1">
+            No products are currently triggered by low stock reorder thresholds.
+          </p>
         </div>
       )}
     </div>

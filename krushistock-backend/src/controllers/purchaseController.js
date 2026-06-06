@@ -1,7 +1,13 @@
 const Purchase = require('../models/Purchase');
-const Stock = require('../models/Stock');
+const PurchaseInvoice = require('../models/PurchaseInvoice');
 const logger = require('../utils/logger');
 const mongoose = require('mongoose');
+const {
+  createPurchaseWithInvoice,
+  updatePurchaseWithInvoice,
+  deletePurchaseWithInvoice,
+  createPurchasePdf
+} = require('../services/purchaseService');
 
 const getAllPurchases = async (req, res, next) => {
   try {
@@ -9,9 +15,26 @@ const getAllPurchases = async (req, res, next) => {
     const limit = parseInt(req.query.limit, 10) || 10;
     const skip = (page - 1) * limit;
 
-    const total = await Purchase.countDocuments();
+    const query = {};
 
-    const purchases = await Purchase.find()
+    if (req.query.supplier) {
+      query.supplier = req.query.supplier;
+    }
+    if (req.query.paymentStatus) {
+      query.paymentStatus = req.query.paymentStatus;
+    }
+    if (req.query.startDate || req.query.endDate) {
+      query.purchaseDate = {};
+      if (req.query.startDate) query.purchaseDate.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) query.purchaseDate.$lte = new Date(req.query.endDate);
+    }
+    if (req.query.search) {
+      query.purchaseNumber = { $regex: req.query.search, $options: 'i' };
+    }
+
+    const total = await Purchase.countDocuments(query);
+
+    const purchases = await Purchase.find(query)
       .populate('supplier', 'name phone')
       .populate('items.product', 'name unit')
       .populate('createdBy', 'name')
@@ -31,6 +54,83 @@ const getAllPurchases = async (req, res, next) => {
     });
   } catch (error) {
     logger.error(`Get all purchases error: ${error.message}`);
+    next(error);
+  }
+};
+
+const getPurchaseHistory = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+    const query = {};
+
+    if (req.query.supplier) {
+      query.supplierId = req.query.supplier;
+    }
+    if (req.query.paymentStatus) {
+      query.paymentStatus = req.query.paymentStatus;
+    }
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+    if (req.query.startDate || req.query.endDate) {
+      query.purchaseDate = {};
+      if (req.query.startDate) query.purchaseDate.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) query.purchaseDate.$lte = new Date(req.query.endDate);
+    }
+    if (req.query.search) {
+      query.$or = [
+        { invoiceNumber: { $regex: req.query.search, $options: 'i' } },
+        { supplierName: { $regex: req.query.search, $options: 'i' } }
+      ];
+    }
+
+    const total = await PurchaseInvoice.countDocuments(query);
+    const invoices = await PurchaseInvoice.find(query)
+      .populate('supplierId', 'name phone email address gst')
+      .populate('products.productId', 'name unit category')
+      .populate('createdBy', 'name')
+      .sort({ purchaseDate: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.status(200).json({
+      success: true,
+      count: invoices.length,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit)
+      },
+      data: invoices
+    });
+  } catch (error) {
+    logger.error(`Get purchase history error: ${error.message}`);
+    next(error);
+  }
+};
+
+const getPurchaseInvoiceByNumber = async (req, res, next) => {
+  try {
+    const invoice = await PurchaseInvoice.findOne({ invoiceNumber: req.params.invoiceNumber })
+      .populate('supplierId', 'name phone email address gst')
+      .populate('products.productId', 'name unit category')
+      .populate('createdBy', 'name');
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase invoice not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: invoice
+    });
+  } catch (error) {
+    logger.error(`Get purchase invoice error: ${error.message}`);
     next(error);
   }
 };
@@ -62,39 +162,29 @@ const getPurchase = async (req, res, next) => {
 const createPurchase = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
+  let invoice = null;
   try {
-    const purchaseData = {
-      ...req.body,
-      createdBy: req.user.id
-    };
-
-    const [purchase] = await Purchase.create([purchaseData], { session });
-
-    for (const item of purchase.items) {
-      const stock = await Stock.findOneAndUpdate(
-        { product: item.product },
-        { $inc: { quantity: item.quantity } },
-        { new: true, session }
-      );
-
-      if (!stock) {
-        // If stock document doesn't exist, create it
-        await Stock.create([{
-          product: item.product,
-          quantity: item.quantity,
-          lowStockLimit: 10
-        }], { session });
-      }
-
-      logger.info(`Stock increased for product: ${item.product} by ${item.quantity}`);
-    }
+    const result = await createPurchaseWithInvoice({
+      purchaseData: req.body,
+      userId: req.user.id,
+      session
+    });
+    invoice = result.invoice;
+    const purchase = result.purchase;
 
     await session.commitTransaction();
     logger.info(`Purchase created: ${purchase.purchaseNumber}`);
 
+    try {
+      invoice = await createPurchasePdf(invoice);
+    } catch (pdfError) {
+      logger.error(`Purchase invoice PDF error: ${pdfError.message}`);
+    }
+
     res.status(201).json({
       success: true,
-      data: purchase
+      data: purchase,
+      invoice
     });
   } catch (error) {
     await session.abortTransaction();
@@ -108,53 +198,30 @@ const createPurchase = async (req, res, next) => {
 const updatePurchase = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
+  let invoice = null;
   try {
-    const existingPurchase = await Purchase.findById(req.params.id).session(session);
-
-    if (!existingPurchase) {
-      throw new Error('Purchase not found');
-    }
-
-    // Revert old stock
-    for (const oldItem of existingPurchase.items) {
-      await Stock.findOneAndUpdate(
-        { product: oldItem.product },
-        { $inc: { quantity: -oldItem.quantity } },
-        { session }
-      );
-    }
-
-    const purchase = await Purchase.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true, session }
-    );
-
-    // Apply new stock
-    if (purchase.items) {
-      for (const newItem of purchase.items) {
-        const stock = await Stock.findOneAndUpdate(
-          { product: newItem.product },
-          { $inc: { quantity: newItem.quantity } },
-          { session }
-        );
-
-        if (!stock) {
-          await Stock.create([{
-            product: newItem.product,
-            quantity: newItem.quantity,
-            lowStockLimit: 10
-          }], { session });
-        }
-      }
-    }
+    const result = await updatePurchaseWithInvoice({
+      purchaseId: req.params.id,
+      purchaseData: req.body,
+      userId: req.user.id,
+      session
+    });
+    const purchase = result.purchase;
+    invoice = result.invoice;
 
     await session.commitTransaction();
     logger.info(`Purchase updated: ${purchase.purchaseNumber}`);
 
+    try {
+      invoice = await createPurchasePdf(invoice);
+    } catch (pdfError) {
+      logger.error(`Purchase invoice PDF error: ${pdfError.message}`);
+    }
+
     res.status(200).json({
       success: true,
-      data: purchase
+      data: purchase,
+      invoice
     });
   } catch (error) {
     await session.abortTransaction();
@@ -172,22 +239,11 @@ const deletePurchase = async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const purchase = await Purchase.findById(req.params.id).session(session);
-
-    if (!purchase) {
-      throw new Error('Purchase not found');
-    }
-
-    // Revert stock
-    for (const item of purchase.items) {
-      await Stock.findOneAndUpdate(
-        { product: item.product },
-        { $inc: { quantity: -item.quantity } },
-        { session }
-      );
-    }
-
-    await purchase.deleteOne({ session });
+    const { purchase } = await deletePurchaseWithInvoice({
+      purchaseId: req.params.id,
+      userId: req.user.id,
+      session
+    });
 
     await session.commitTransaction();
     logger.info(`Purchase deleted: ${purchase.purchaseNumber}`);
@@ -211,6 +267,8 @@ const deletePurchase = async (req, res, next) => {
 module.exports = {
   getAllPurchases,
   getPurchase,
+  getPurchaseHistory,
+  getPurchaseInvoiceByNumber,
   createPurchase,
   updatePurchase,
   deletePurchase

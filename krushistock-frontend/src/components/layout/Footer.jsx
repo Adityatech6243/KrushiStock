@@ -2,10 +2,8 @@ import React from 'react';
 
 const Footer = () => {
   return (
-    <footer className="bg-green-700 border-t border-green-800 py-4 px-6 mt-auto print:hidden">
-      <div className="text-center text-green-50 text-sm font-medium">
-        KrushiStock © 2026 | Cultivating Success
-      </div>
+    <footer className="py-4 px-6 mt-auto border-t border-slate-100/80 bg-white/40 print:hidden text-center text-xs font-semibold text-slate-400 uppercase tracking-widest">
+      KrushiStock © 2026 | Cultivating Success
     </footer>
   );
 };

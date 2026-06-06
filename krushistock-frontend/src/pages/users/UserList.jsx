@@ -6,8 +6,20 @@ import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
-import Loader from '../../components/common/Loader';
 import { USER_ROLES } from '../../utils/constants';
+import { 
+  Users, 
+  UserPlus, 
+  Shield, 
+  Trash2, 
+  Edit3, 
+  UserCheck, 
+  UserX, 
+  Key, 
+  Phone,
+  Mail,
+  User
+} from 'lucide-react';
 
 const UserList = () => {
   const [users, setUsers] = useState([]);
@@ -183,18 +195,46 @@ const UserList = () => {
   };
 
   const columns = [
-    { header: 'Name', accessor: 'name' },
-    { header: 'Username', accessor: 'username' },
-    { header: 'Email', accessor: 'email' },
+    { 
+      header: 'Full Name', 
+      accessor: 'name', 
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs uppercase">
+            {row.name.substring(0, 2)}
+          </div>
+          <span className="font-bold text-slate-800">{row.name}</span>
+        </div>
+      ) 
+    },
+    { header: 'Username', accessor: 'username', render: (row) => <span className="font-semibold text-slate-600">{row.username}</span> },
+    { 
+      header: 'Contact Info', 
+      accessor: 'email', 
+      render: (row) => (
+        <div className="space-y-0.5 text-[11px] font-semibold text-slate-500">
+          <div className="flex items-center gap-1">
+            <Mail size={10} className="text-slate-400" />
+            <span>{row.email}</span>
+          </div>
+          {row.phone && (
+            <div className="flex items-center gap-1">
+              <Phone size={10} className="text-slate-400" />
+              <span>{row.phone}</span>
+            </div>
+          )}
+        </div>
+      ) 
+    },
     {
-      header: 'Role',
+      header: 'System Role',
       accessor: 'role',
       render: (row) => (
         <span
-          className={`px-2 py-1 rounded text-xs font-medium ${
+          className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
             row.role === 'admin'
-              ? 'bg-purple-100 text-purple-700'
-              : 'bg-blue-100 text-blue-700'
+              ? 'bg-purple-50 text-purple-700 border-purple-100'
+              : 'bg-blue-50 text-blue-700 border-blue-105'
           }`}
         >
           {row.role.toUpperCase()}
@@ -202,137 +242,147 @@ const UserList = () => {
       )
     },
     {
-      header: 'Status',
+      header: 'Account Status',
       accessor: 'isActive',
       render: (row) => (
         <button
           onClick={() => handleToggleStatus(row)}
-          className={`px-2 py-1 rounded text-xs font-medium cursor-pointer transition-colors ${
+          className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold cursor-pointer transition-colors border flex items-center gap-1 ${
             row.isActive
-              ? 'bg-green-100 text-green-700 hover:bg-green-200'
-              : 'bg-red-100 text-red-700 hover:bg-red-200'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100'
+              : 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100'
           }`}
-          title="Click to toggle status"
+          title="Click to toggle account status"
         >
-          {row.isActive ? 'Active' : 'Inactive'}
+          {row.isActive ? (
+            <>
+              <UserCheck size={10} />
+              Active
+            </>
+          ) : (
+            <>
+              <UserX size={10} />
+              Inactive
+            </>
+          )}
         </button>
       )
     }
   ];
 
-  if (loading && users.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Users</h1>
-        <p className="text-gray-600">Manage system users and permissions</p>
+    <div className="space-y-6 animate-fadeIn pb-10">
+      {/* Header */}
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+          <Users className="text-primary-600" size={24} />
+          Staff & Operator Management
+        </h1>
+        <p className="text-slate-500 text-xs md:text-sm">Manage billing operators, inventory administrators, roles, and console access permissions.</p>
       </div>
 
       {/* Form Section */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 className="text-lg font-semibold mb-4">{isEditing ? 'Edit User' : 'Add New User'}</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-white rounded-xl border border-slate-100 shadow-soft p-5 space-y-4">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-50 pb-3">
+          <UserPlus size={16} className="text-primary-600" />
+          {isEditing ? 'Modify Operator Credentials' : 'Register New Operator'}
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
               label="Full Name"
               type="text"
               name="name"
               value={formData.name}
               onChange={handleFormChange}
-              placeholder="Enter full name"
+              placeholder="e.g. Aditya Patil"
               required
             />
 
             <Input
-              label="Phone"
+              label="Phone Number"
               type="tel"
               name="phone"
               value={formData.phone}
               onChange={handleFormChange}
-              placeholder="Enter phone number"
+              placeholder="e.g. 9876543210"
               required
               error={fieldErrors.phone}
             />
 
             <Input
-              label="Username"
+              label="Console Username"
               type="text"
               name="username"
               value={formData.username}
               onChange={handleFormChange}
-              placeholder="Enter username"
+              placeholder="e.g. aditya_operator"
               required
             />
 
             <Input
-              label="Email"
+              label="Email Address"
               type="email"
               name="email"
               value={formData.email}
               onChange={handleFormChange}
-              placeholder="Enter email address"
+              placeholder="e.g. aditya@gmail.com"
               required
             />
           </div>
 
-          <div className="mt-4">
-            <Select
-              label="Role"
-              name="role"
-              value={formData.role}
-              onChange={handleFormChange}
-              options={[
-                { value: USER_ROLES.ADMIN, label: 'Admin' },
-                { value: USER_ROLES.STAFF, label: 'Staff' }
-              ]}
-              required
-            />
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Select
+                label="Assigned Role"
+                name="role"
+                value={formData.role}
+                onChange={handleFormChange}
+                options={[
+                  { value: USER_ROLES.ADMIN, label: 'Admin (Full Access)' },
+                  { value: USER_ROLES.STAFF, label: 'Staff (Billing & Stock)' }
+                ]}
+                required
+              />
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <Input
-              label={isEditing ? "New Password (Optional)" : "Password"}
+              label={isEditing ? "Update Password (Optional)" : "Password"}
               type="password"
               name="password"
               value={formData.password}
               onChange={handleFormChange}
-              placeholder={isEditing ? "Leave blank to keep current password" : "Enter password"}
+              placeholder={isEditing ? "•••••• (leave blank to keep)" : "•••••• (min 6 chars)"}
               required={!isEditing}
             />
 
             <Input
-              label={isEditing ? "Confirm New Password" : "Confirm Password"}
+              label={isEditing ? "Confirm Password Update" : "Confirm Password"}
               type="password"
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleFormChange}
-              placeholder="Confirm password"
+              placeholder="••••••"
               required={!isEditing && formData.password.length > 0}
             />
           </div>
 
           {error && (
-            <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs font-bold">
               {error}
             </div>
           )}
 
-          <div className="flex gap-3 mt-4">
-            <Button type="submit" variant="primary" disabled={formLoading}>
-              {formLoading ? 'Saving...' : isEditing ? 'Update User' : 'Add User'}
+          <div className="flex items-center gap-2 pt-2">
+            <Button type="submit" variant="primary" disabled={formLoading} className="text-xs font-bold py-2 px-5">
+              {formLoading ? 'Processing...' : isEditing ? 'Update Operator' : 'Register Operator'}
             </Button>
             {isEditing && (
               <Button
                 type="button"
                 variant="secondary"
                 onClick={resetForm}
+                className="text-xs font-bold py-2 px-5"
               >
                 Cancel Edit
               </Button>
@@ -342,16 +392,22 @@ const UserList = () => {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">User List</h2>
-        <Table 
-          columns={columns} 
-          data={users} 
-          onEdit={handleEdit} 
-          onDelete={handleDelete} 
-          pagination={pagination} 
-          onPageChange={handlePageChange} 
-        />
+      <div className="bg-white rounded-xl border border-slate-100 shadow-soft p-5 space-y-4">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-50 pb-2">
+          <Users size={16} className="text-slate-400" />
+          Active System Operators
+        </h2>
+        <div className="overflow-hidden border border-slate-100 rounded-xl">
+          <Table 
+            columns={columns} 
+            data={users} 
+            loading={loading}
+            onEdit={handleEdit} 
+            onDelete={handleDelete} 
+            pagination={pagination} 
+            onPageChange={handlePageChange} 
+          />
+        </div>
       </div>
     </div>
   );

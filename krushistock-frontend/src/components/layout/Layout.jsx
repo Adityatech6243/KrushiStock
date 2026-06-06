@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -7,6 +7,7 @@ import Footer from './Footer';
 const Layout = () => {
   const location = useLocation();
   const path = location.pathname;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const getBackgroundClass = () => {
     if (path.startsWith('/products') || path.startsWith('/categories') || path.startsWith('/stock')) return 'bg-products';
@@ -17,10 +18,19 @@ const Layout = () => {
 
   return (
     <div className={`flex min-h-screen ${getBackgroundClass()} transition-all duration-500 print:bg-white`}>
-      <Sidebar />
-      <div className="flex-1 ml-64 print:ml-0 bg-white/40 print:bg-white backdrop-blur-sm min-h-screen flex flex-col">
-        <Header />
-        <main className="p-6 flex-1">
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      
+      {/* Sidebar mobile overlay backdrop */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/20 backdrop-blur-xs z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <div className="flex-1 lg:ml-64 print:ml-0 min-h-screen flex flex-col overflow-hidden">
+        <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <main className="p-4 md:p-6 flex-1 max-w-7xl w-full mx-auto">
           <Outlet />
         </main>
         <Footer />

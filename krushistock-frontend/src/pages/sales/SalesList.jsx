@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getAllSales, deleteSale, createSale, updateSale } from '../../services/salesService';
+import { getAllSales, deleteSale, createSale, updateSale, getSaleInvoice } from '../../services/salesService';
+import { sendManualInvoice } from '../../services/whatsAppService';
 import { getAllFarmers } from '../../services/farmerService';
 import { getAllProducts } from '../../services/productService';
 import { showConfirm, showSuccess, showError } from '../../utils/alert';
@@ -8,14 +9,19 @@ import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
-import Loader from '../../components/common/Loader';
+import SalesInvoicePreviewModal from '../../components/invoices/SalesInvoicePreviewModal';
 import { formatDate, formatCurrency } from '../../utils/helpers';
 import { PAYMENT_METHODS } from '../../utils/constants';
+import { Eye } from 'lucide-react';
 
 const SalesList = () => {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [whatsappLoading, setWhatsappLoading] = useState({});
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   // Form state
   const [farmers, setFarmers] = useState([]);
@@ -23,7 +29,8 @@ const SalesList = () => {
   const [formData, setFormData] = useState({
     customer: '',
     saleDate: new Date().toISOString().split('T')[0],
-    paymentMethod: 'Cash'
+    paymentMethod: 'Cash',
+    sendWhatsApp: false
   });
   const [items, setItems] = useState([
     { product: '', quantity: '', price: '', availableStock: 0 }
@@ -38,6 +45,33 @@ const SalesList = () => {
     fetchFarmers();
     fetchProducts();
   }, [pagination.page]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const customerId = params.get('customer');
+    const productId = params.get('product');
+
+    if (customerId) {
+      setFormData((prev) => ({
+        ...prev,
+        customer: customerId
+      }));
+    }
+
+    if (productId && products.length > 0) {
+      const selectedProd = products.find(p => p._id === productId);
+      if (selectedProd) {
+        setItems([
+          {
+            product: productId,
+            quantity: 1,
+            price: selectedProd.price,
+            availableStock: selectedProd.stock
+          }
+        ]);
+      }
+    }
+  }, [products]);
 
   const fetchSales = async (page = 1) => {
     setLoading(true);
@@ -63,7 +97,7 @@ const SalesList = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await getAllProducts();
+      const response = await getAllProducts(1, 1000);
       setProducts(response.data);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -120,6 +154,23 @@ const SalesList = () => {
     }, 0);
   };
 
+  const openInvoicePreview = async (saleId) => {
+    setInvoiceModalOpen(true);
+    setInvoiceLoading(true);
+
+    try {
+      const response = await getSaleInvoice(saleId);
+      setSelectedInvoice(response.data);
+    } catch (error) {
+      console.error('Error loading invoice preview:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to load invoice preview.';
+      showError('Preview Failed', errorMessage);
+      setInvoiceModalOpen(false);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -157,16 +208,22 @@ const SalesList = () => {
         totalAmount: calculateTotal()
       };
 
+      let savedSale;
       if (isEditing) {
-        await updateSale(editId, saleData);
+        const response = await updateSale(editId, saleData);
+        savedSale = response.data;
         showSuccess('Success!', 'Sale updated successfully!');
       } else {
-        await createSale(saleData);
+        const response = await createSale(saleData);
+        savedSale = response.data;
         showSuccess('Success!', 'Sale recorded successfully!');
       }
       resetForm();
       fetchSales(pagination.page);
       fetchProducts(); // Refresh products to get updated stock
+      if (savedSale?._id) {
+        await openInvoicePreview(savedSale._id);
+      }
     } catch (error) {
       console.error('Error recording sale:', error);
       const errorMessage = error.response?.data?.message || 'Failed to record sale. Please try again.';
@@ -180,14 +237,15 @@ const SalesList = () => {
     setIsEditing(true);
     setEditId(sale._id);
     
-    const formattedDate = sale.date 
-      ? new Date(sale.date).toISOString().split('T')[0] 
+    const formattedDate = sale.saleDate
+      ? new Date(sale.saleDate).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0];
 
     setFormData({
       customer: sale.customer?._id || sale.customer || '',
       saleDate: formattedDate,
-      paymentMethod: sale.paymentMethod || 'Cash'
+      paymentMethod: sale.paymentMethod || 'Cash',
+      sendWhatsApp: false
     });
 
     if (sale.items && sale.items.length > 0) {
@@ -215,10 +273,43 @@ const SalesList = () => {
     setFormData({
       customer: '',
       saleDate: new Date().toISOString().split('T')[0],
-      paymentMethod: 'Cash'
+      paymentMethod: 'Cash',
+      sendWhatsApp: false
     });
     setItems([{ product: '', quantity: '', price: '', availableStock: 0 }]);
     setFieldErrors([]);
+  };
+
+  const handleSendWhatsAppInvoice = async (sale) => {
+    if (!sale.customer || !sale.customer.phone) {
+      showError('Error', 'Farmer does not have a registered phone number.');
+      return;
+    }
+    
+    setWhatsappLoading(prev => ({ ...prev, [sale._id]: true }));
+    try {
+      await sendManualInvoice(sale._id);
+      showSuccess('Sent!', `Invoice WhatsApp PDF successfully sent to ${sale.customer.name || 'Farmer'}.`);
+    } catch (error) {
+      console.error('Error sending manual WhatsApp invoice:', error);
+      const errMsg = error.response?.data?.message || 'Failed to send WhatsApp invoice. Please check credentials.';
+      showError('Failed to Send', errMsg);
+    } finally {
+      setWhatsappLoading(prev => ({ ...prev, [sale._id]: false }));
+    }
+  };
+
+  const handlePrintInvoice = () => {
+    window.print();
+  };
+
+  const handleShareSelectedInvoice = async () => {
+    if (!selectedInvoice) return;
+    await handleSendWhatsAppInvoice({
+      _id: selectedInvoice._id,
+      saleNumber: selectedInvoice.saleNumber,
+      customer: selectedInvoice.customer
+    });
   };
 
   const handleDelete = async (sale) => {
@@ -248,8 +339,8 @@ const SalesList = () => {
     { header: 'Sale #', accessor: 'saleNumber' },
     {
       header: 'Date',
-      accessor: 'date',
-      render: (row) => formatDate(row.date)
+      accessor: 'saleDate',
+      render: (row) => formatDate(row.saleDate)
     },
     {
       header: 'Customer',
@@ -269,29 +360,63 @@ const SalesList = () => {
     {
       header: 'Payment',
       accessor: 'paymentMethod'
+    },
+    {
+      header: 'Invoice',
+      accessor: 'download',
+      render: (row) => {
+        return (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => openInvoicePreview(row._id)}
+            className="flex items-center gap-1 text-[10px] py-1 px-2.5 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-250 transition-all font-bold"
+          >
+            <Eye size={12} />
+            Preview
+          </Button>
+        );
+      }
+    },
+    {
+      header: 'WhatsApp Invoice',
+      accessor: 'whatsapp',
+      render: (row) => {
+        if (!row.customer || !row.customer.phone) {
+          return <span className="text-[10px] font-bold text-slate-400">No Phone</span>;
+        }
+        const isSending = whatsappLoading[row._id];
+        return (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isSending}
+            onClick={() => handleSendWhatsAppInvoice(row)}
+            className="flex items-center gap-1 text-[10px] py-1 px-2.5 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-250 disabled:opacity-50 transition-all font-bold"
+          >
+            {isSending ? 'Sending...' : '💬 Send Invoice'}
+          </Button>
+        );
+      }
     }
   ];
 
-  if (loading && sales.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Sales History</h1>
-        <p className="text-gray-600">Record and view sales transactions</p>
+    <div className="space-y-6">
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Sales POS Terminal</h1>
+        <p className="text-slate-500 text-xs md:text-sm">Record and issue customer invoices, track sales transactions, and update farmer profiles.</p>
       </div>
 
       {/* Form Section */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8 max-w-4xl">
-        <h2 className="text-lg font-semibold mb-4">{isEditing ? 'Edit Sale' : 'Add New Sale'}</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft max-w-4xl">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
+          {isEditing ? '⚡ Edit Invoice Details' : '📝 Issue New Invoice'}
+        </h2>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
               label="Customer"
               name="customer"
@@ -316,17 +441,17 @@ const SalesList = () => {
             />
           </div>
 
-          <div className="my-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Sale Items</h3>
+          <div className="my-6 p-4 bg-slate-50/50 rounded-xl border border-slate-100 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Invoice Items</h3>
               <Button type="button" variant="outline" size="sm" onClick={addItem}>
                 + Add Item
               </Button>
             </div>
 
             {items.map((item, index) => (
-              <div key={index} className="grid grid-cols-12 gap-4 mb-4 items-end">
-                <div className="col-span-5">
+              <div key={index} className="grid grid-cols-12 gap-4 items-end">
+                <div className="col-span-12 md:col-span-5">
                   <Select
                     label={index === 0 ? 'Product' : ''}
                     name="product"
@@ -339,7 +464,7 @@ const SalesList = () => {
                     required
                   />
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-6 md:col-span-3">
                   <Input
                     label={index === 0 ? 'Quantity' : ''}
                     type="number"
@@ -352,10 +477,10 @@ const SalesList = () => {
                     error={fieldErrors[index]?.quantity}
                   />
                   {item.availableStock > 0 && !isEditing && (
-                    <p className="text-xs text-gray-500">Available: {item.availableStock}</p>
+                    <p className="text-[10px] text-slate-400 font-medium -mt-3.5 mb-2 pl-1">Available: {item.availableStock}</p>
                   )}
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-5 md:col-span-3">
                   <Input
                     label={index === 0 ? 'Price' : ''}
                     type="number"
@@ -369,13 +494,14 @@ const SalesList = () => {
                     error={fieldErrors[index]?.price}
                   />
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-1 pb-4 flex justify-center">
                   {items.length > 1 && (
                     <Button
                       type="button"
                       variant="danger"
                       size="sm"
                       onClick={() => removeItem(index)}
+                      className="p-1 h-9 w-9 rounded-lg"
                     >
                       ×
                     </Button>
@@ -385,14 +511,12 @@ const SalesList = () => {
             ))}
           </div>
 
-          <div className="border-t pt-4 mb-6">
-            <div className="flex justify-end">
-              <div className="text-right">
-                <span className="text-gray-600 mr-4">Total Amount:</span>
-                <span className="text-2xl font-bold text-green-600">
-                  {formatCurrency(calculateTotal())}
-                </span>
-              </div>
+          <div className="border-t border-slate-100 pt-4 mb-6 flex justify-between items-center">
+            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Sales Invoice</span>
+            <div className="text-right">
+              <span className="text-2xl font-black text-primary-600">
+                {formatCurrency(calculateTotal())}
+              </span>
             </div>
           </div>
 
@@ -405,9 +529,23 @@ const SalesList = () => {
             required
           />
 
-          <div className="flex gap-3 mt-6">
+          <div className="flex items-center gap-3 my-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/80">
+            <input
+              type="checkbox"
+              id="sendWhatsApp"
+              name="sendWhatsApp"
+              checked={formData.sendWhatsApp}
+              onChange={(e) => setFormData({ ...formData, sendWhatsApp: e.target.checked })}
+              className="h-4 w-4 text-primary-600 border-slate-350 rounded focus:ring-primary-500 transition-all cursor-pointer"
+            />
+            <label htmlFor="sendWhatsApp" className="text-xs font-bold text-slate-650 select-none cursor-pointer">
+              💬 Send Invoice on WhatsApp to Farmer (requires consent)
+            </label>
+          </div>
+
+          <div className="flex gap-2.5 mt-6 border-t border-slate-100 pt-4">
             <Button type="submit" variant="primary" disabled={formLoading}>
-              {formLoading ? 'Recording...' : isEditing ? 'Update Sale' : 'Record Sale'}
+              {formLoading ? 'Recording...' : isEditing ? 'Update Invoice' : 'Issue Invoice'}
             </Button>
             {isEditing && (
               <Button
@@ -423,17 +561,28 @@ const SalesList = () => {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Sales List</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft space-y-4">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Invoice History</h2>
         <Table 
           columns={columns} 
           data={sales} 
+          loading={loading}
           onEdit={handleEdit}
           onDelete={handleDelete} 
           pagination={pagination} 
           onPageChange={handlePageChange} 
         />
       </div>
+
+      <SalesInvoicePreviewModal
+        isOpen={invoiceModalOpen}
+        invoice={selectedInvoice}
+        loading={invoiceLoading}
+        onClose={() => setInvoiceModalOpen(false)}
+        onPrint={handlePrintInvoice}
+        onShare={handleShareSelectedInvoice}
+        sharing={selectedInvoice ? whatsappLoading[selectedInvoice._id] : false}
+      />
     </div>
   );
 };

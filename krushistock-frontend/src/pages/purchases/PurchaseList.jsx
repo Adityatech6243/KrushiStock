@@ -7,7 +7,6 @@ import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
-import Loader from '../../components/common/Loader';
 import { formatDate, formatCurrency } from '../../utils/helpers';
 
 const PurchaseList = () => {
@@ -268,26 +267,20 @@ const PurchaseList = () => {
     }
   ];
 
-  if (loading && purchases.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Purchase History</h1>
-        <p className="text-gray-600">Record and view purchase transactions</p>
+    <div className="space-y-6">
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Purchases Journal</h1>
+        <p className="text-slate-500 text-xs md:text-sm">Log inventory restocks from suppliers and manage batch payments.</p>
       </div>
 
       {/* Form Section */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8 max-w-4xl">
-        <h2 className="text-lg font-semibold mb-4">{isEditing ? 'Edit Purchase' : 'Add New Purchase'}</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft max-w-4xl">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
+          {isEditing ? '⚡ Edit Purchase Record' : '🛒 Log New Purchase Batch'}
+        </h2>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
               label="Supplier"
               name="supplier"
@@ -310,17 +303,17 @@ const PurchaseList = () => {
             />
           </div>
 
-          <div className="my-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Purchase Items</h3>
+          <div className="my-6 p-4 bg-slate-50/50 rounded-xl border border-slate-100 space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Purchase Items</h3>
               <Button type="button" variant="outline" size="sm" onClick={addItem}>
                 + Add Item
               </Button>
             </div>
 
             {items.map((item, index) => (
-              <div key={index} className="grid grid-cols-12 gap-4 mb-4 items-end">
-                <div className="col-span-5">
+              <div key={index} className="grid grid-cols-12 gap-4 items-end">
+                <div className="col-span-12 md:col-span-5">
                   <Select
                     label={index === 0 ? 'Product' : ''}
                     name="product"
@@ -328,12 +321,12 @@ const PurchaseList = () => {
                     onChange={(e) => handleItemChange(index, 'product', e.target.value)}
                     options={products.filter(p => p.isActive).map((prod) => ({
                       value: prod._id,
-                      label: prod.name
+                      label: `${prod.name} (Stock: ${prod.stock})`
                     }))}
                     required
                   />
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-6 md:col-span-3">
                   <Input
                     label={index === 0 ? 'Quantity' : ''}
                     type="number"
@@ -346,9 +339,9 @@ const PurchaseList = () => {
                     error={fieldErrors[index]?.quantity}
                   />
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-5 md:col-span-3">
                   <Input
-                    label={index === 0 ? 'Price' : ''}
+                    label={index === 0 ? 'Cost Price' : ''}
                     type="number"
                     name="price"
                     value={item.price}
@@ -360,13 +353,14 @@ const PurchaseList = () => {
                     error={fieldErrors[index]?.price}
                   />
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-1 pb-4 flex justify-center">
                   {items.length > 1 && (
                     <Button
                       type="button"
                       variant="danger"
                       size="sm"
                       onClick={() => removeItem(index)}
+                      className="p-1 h-9 w-9 rounded-lg"
                     >
                       ×
                     </Button>
@@ -376,18 +370,16 @@ const PurchaseList = () => {
             ))}
           </div>
 
-          <div className="border-t pt-4 mb-6">
-            <div className="flex justify-end">
-              <div className="text-right">
-                <span className="text-gray-600 mr-4">Total Amount:</span>
-                <span className="text-2xl font-bold text-green-600">
-                  {formatCurrency(calculateTotal())}
-                </span>
-              </div>
+          <div className="border-t border-slate-100 pt-4 mb-6 flex justify-between items-center">
+            <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Purchase Value</span>
+            <div className="text-right">
+              <span className="text-2xl font-black text-slate-800">
+                {formatCurrency(calculateTotal())}
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
               label="Payment Method"
               name="paymentMethod"
@@ -407,9 +399,9 @@ const PurchaseList = () => {
             />
           </div>
 
-          <div className="flex gap-3 mt-6">
+          <div className="flex gap-2.5 mt-6 border-t border-slate-100 pt-4">
             <Button type="submit" variant="primary" disabled={formLoading}>
-              {formLoading ? 'Saving...' : isEditing ? 'Update Purchase' : 'Add Purchase'}
+              {formLoading ? 'Saving...' : isEditing ? 'Update Purchase Record' : 'Record Purchase Batch'}
             </Button>
             {isEditing && (
               <Button
@@ -425,11 +417,12 @@ const PurchaseList = () => {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Purchase List</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft space-y-4">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Purchase Logs</h2>
         <Table 
           columns={columns} 
           data={purchases} 
+          loading={loading}
           onEdit={handleEdit}
           onDelete={handleDelete} 
           pagination={pagination} 

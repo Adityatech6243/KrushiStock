@@ -35,6 +35,50 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  imageUrl: {
+    type: String,
+    default: null
+  },
+  batchNumber: {
+    type: String,
+    default: null
+  },
+  manufactureDate: {
+    type: Date,
+    default: null
+  },
+  expiryDate: {
+    type: Date,
+    default: null
+  },
+  supplierName: {
+    type: String,
+    default: null
+  },
+  purchasePrice: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  sellingPrice: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  quantity: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  stockStatus: {
+    type: String,
+    enum: ['Fresh', 'Near Expiry', 'Expired', 'Dead Stock'],
+    default: 'Fresh'
+  },
+  lastSoldDate: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -56,5 +100,10 @@ const productSchema = new mongoose.Schema({
     ref: 'User'
   }
 });
+
+// Indexes for query optimization
+productSchema.index({ expiryDate: 1 });
+productSchema.index({ stockStatus: 1 });
+productSchema.index({ lastSoldDate: 1 });
 
 module.exports = mongoose.model('Product', productSchema);

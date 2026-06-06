@@ -1,7 +1,14 @@
 import api from './api';
 
-export const getAllFarmers = async (page = 1, limit = 10) => {
-  const response = await api.get(`/farmers?page=${page}&limit=${limit}`);
+export const getAllFarmers = async (page = 1, limit = 10, filters = {}) => {
+  const params = new URLSearchParams({
+    page,
+    limit,
+    ...Object.fromEntries(
+      Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    )
+  });
+  const response = await api.get(`/farmers?${params.toString()}`);
   return response.data;
 };
 

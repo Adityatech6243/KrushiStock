@@ -28,6 +28,19 @@ const saleSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Farmer'
   },
+  farmerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Farmer'
+  },
+  cropType: {
+    type: String,
+    trim: true
+  },
+  season: {
+    type: String,
+    enum: ['Monsoon', 'Summer', 'Winter'],
+    trim: true
+  },
   items: [saleItemSchema],
   totalAmount: {
     type: Number,
@@ -52,6 +65,9 @@ const saleSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Indexes for query optimization
+saleSchema.index({ season: 1 });
 
 saleSchema.pre('validate', async function(next) {
   if (this.isNew && !this.saleNumber) {

@@ -7,10 +7,15 @@ const getAllFarmers = async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const skip = (page - 1) * limit;
+    const query = { deletedAt: null };
 
-    const total = await Farmer.countDocuments({ deletedAt: null });
+    if (req.query.village) {
+      query.village = { $regex: req.query.village, $options: 'i' };
+    }
 
-    const farmers = await Farmer.find({ deletedAt: null })
+    const total = await Farmer.countDocuments(query);
+
+    const farmers = await Farmer.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -46,6 +51,22 @@ const createFarmer = async (req, res, next) => {
   try {
     const farmerData = { ...req.body };
     if (req.user) farmerData.createdBy = req.user.id;
+
+    // Sync name/fullName, phone/mobile
+    if (farmerData.name && !farmerData.fullName) farmerData.fullName = farmerData.name;
+    if (farmerData.fullName && !farmerData.name) farmerData.name = farmerData.fullName;
+    if (farmerData.phone && !farmerData.mobile) farmerData.mobile = farmerData.phone;
+    if (farmerData.mobile && !farmerData.phone) farmerData.phone = farmerData.mobile;
+
+    // Process crops text into cropTypes array
+    if (farmerData.crops) {
+      farmerData.cropTypes = farmerData.crops
+        .split(',')
+        .map((c) => c.trim())
+        .filter(Boolean);
+    } else if (farmerData.cropTypes) {
+      farmerData.crops = farmerData.cropTypes.join(', ');
+    }
 
     const farmer = await Farmer.create(farmerData);
 
@@ -86,6 +107,26 @@ const updateFarmer = async (req, res, next) => {
   try {
     const updateData = { ...req.body };
     if (req.user) updateData.updatedBy = req.user.id;
+
+    // Sync name/fullName, phone/mobile
+    if (updateData.name && !updateData.fullName) updateData.fullName = updateData.name;
+    if (updateData.fullName && !updateData.name) updateData.name = updateData.fullName;
+    if (updateData.phone && !updateData.mobile) updateData.mobile = updateData.phone;
+    if (updateData.mobile && !updateData.phone) updateData.phone = updateData.mobile;
+
+    // Process crops text into cropTypes array
+    if (updateData.crops !== undefined) {
+      if (updateData.crops) {
+        updateData.cropTypes = updateData.crops
+          .split(',')
+          .map((c) => c.trim())
+          .filter(Boolean);
+      } else {
+        updateData.cropTypes = [];
+      }
+    } else if (updateData.cropTypes !== undefined) {
+      updateData.crops = updateData.cropTypes.join(', ');
+    }
 
     const farmer = await Farmer.findOneAndUpdate(
       { _id: req.params.id, deletedAt: null },

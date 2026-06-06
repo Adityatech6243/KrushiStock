@@ -6,7 +6,6 @@ import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
-import Loader from '../../components/common/Loader';
 import { formatCurrency } from '../../utils/helpers';
 import { PRODUCT_UNITS } from '../../utils/constants';
 
@@ -16,6 +15,7 @@ const ProductList = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -23,10 +23,15 @@ const ProductList = () => {
     category: '',
     supplier: '',
     price: '',
+    sellingPrice: '',
+    purchasePrice: '',
     stock: '',
     unit: '',
     reorderLevel: '',
-    description: ''
+    description: '',
+    batchNumber: '',
+    manufactureDate: '',
+    expiryDate: ''
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -34,15 +39,18 @@ const ProductList = () => {
   const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
-    fetchProducts(pagination.page);
     fetchCategories();
     fetchSuppliers();
-  }, [pagination.page]);
+  }, []);
+
+  useEffect(() => {
+    fetchProducts(pagination.page);
+  }, [pagination.page, categoryFilter]);
 
   const fetchProducts = async (page = 1) => {
     setLoading(true);
     try {
-      const response = await getAllProducts(page, 10);
+      const response = await getAllProducts(page, 10, { category: categoryFilter });
       setProducts(response.data);
       setPagination(response.pagination || { page: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -54,7 +62,7 @@ const ProductList = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await getAllCategories();
+      const response = await getAllCategories(1, 100);
       setCategories(response.data);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -63,7 +71,7 @@ const ProductList = () => {
 
   const fetchSuppliers = async () => {
     try {
-      const response = await getAllSuppliers();
+      const response = await getAllSuppliers(1, 100);
       setSuppliers(response.data);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
@@ -72,6 +80,11 @@ const ProductList = () => {
 
   const handlePageChange = (newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleCategoryFilterChange = (e) => {
+    setCategoryFilter(e.target.value);
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const handleFormChange = (e) => {
@@ -92,12 +105,21 @@ const ProductList = () => {
     e.preventDefault();
 
     const errors = {
-      price: validatePositiveNumber(formData.price, 'Price'),
+      sellingPrice: validatePositiveNumber(formData.sellingPrice, 'Selling Price'),
+      purchasePrice: validatePositiveNumber(formData.purchasePrice, 'Purchase Price'),
       stock: validatePositiveNumber(formData.stock, 'Stock'),
       reorderLevel: validatePositiveNumber(formData.reorderLevel, 'Reorder Level')
     };
 
-    const hasErrors = Object.values(errors).some(err => err !== '');
+    if (formData.manufactureDate && formData.expiryDate) {
+      const mDate = new Date(formData.manufactureDate);
+      const eDate = new Date(formData.expiryDate);
+      if (eDate <= mDate) {
+        errors.expiryDate = 'Expiry date must be after manufacture date';
+      }
+    }
+
+    const hasErrors = Object.values(errors).some(err => err && err !== '');
     if (hasErrors) {
       setFieldErrors(errors);
       return;
@@ -106,11 +128,16 @@ const ProductList = () => {
     setFormLoading(true);
 
     try {
+      const submissionData = {
+        ...formData,
+        price: formData.sellingPrice // ensure backend's required price field is populated
+      };
+
       if (isEditing) {
-        await updateProduct(editId, formData);
+        await updateProduct(editId, submissionData);
         showSuccess('Success!', 'Product updated successfully!');
       } else {
-        await createProduct(formData);
+        await createProduct(submissionData);
         showSuccess('Success!', 'Product added successfully!');
       }
       resetForm();
@@ -132,10 +159,15 @@ const ProductList = () => {
       category: product.category?._id || '',
       supplier: product.supplier?._id || '',
       price: product.price || '',
-      stock: product.stock || '',
+      sellingPrice: product.sellingPrice || product.price || '',
+      purchasePrice: product.purchasePrice || '',
+      stock: product.stock !== undefined ? product.stock : (product.quantity || 0),
       unit: product.unit || '',
       reorderLevel: product.reorderLevel || '',
-      description: product.description || ''
+      description: product.description || '',
+      batchNumber: product.batchNumber || '',
+      manufactureDate: product.manufactureDate ? new Date(product.manufactureDate).toISOString().substring(0, 10) : '',
+      expiryDate: product.expiryDate ? new Date(product.expiryDate).toISOString().substring(0, 10) : ''
     });
     setFieldErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -149,10 +181,15 @@ const ProductList = () => {
       category: '',
       supplier: '',
       price: '',
+      sellingPrice: '',
+      purchasePrice: '',
       stock: '',
       unit: '',
       reorderLevel: '',
-      description: ''
+      description: '',
+      batchNumber: '',
+      manufactureDate: '',
+      expiryDate: ''
     });
     setFieldErrors({});
   };
@@ -199,14 +236,50 @@ const ProductList = () => {
       render: (row) => row.category?.name || 'N/A'
     },
     {
-      header: 'Price',
-      accessor: 'price',
-      render: (row) => formatCurrency(row.price)
+      header: 'Purchase Price',
+      accessor: 'purchasePrice',
+      render: (row) => formatCurrency(row.purchasePrice || 0)
+    },
+    {
+      header: 'Selling Price',
+      accessor: 'sellingPrice',
+      render: (row) => formatCurrency(row.sellingPrice || row.price || 0)
     },
     {
       header: 'Stock',
       accessor: 'stock',
       render: (row) => `${row.stock} ${row.unit || ''}`
+    },
+    {
+      header: 'Expiry Date',
+      accessor: 'expiryDate',
+      render: (row) => row.expiryDate ? new Date(row.expiryDate).toLocaleDateString() : 'N/A'
+    },
+    {
+      header: 'Stock Status',
+      accessor: 'stockStatus',
+      render: (row) => {
+        const status = row.stockStatus || 'Fresh';
+        let badgeClass = '';
+        switch (status) {
+          case 'Expired':
+            badgeClass = 'bg-rose-100 text-rose-800 border-rose-200';
+            break;
+          case 'Near Expiry':
+            badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
+            break;
+          case 'Dead Stock':
+            badgeClass = 'bg-violet-100 text-violet-800 border-violet-200';
+            break;
+          default:
+            badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+        }
+        return (
+          <span className={`px-2 py-1 rounded text-xs font-semibold border ${badgeClass}`}>
+            {status}
+          </span>
+        );
+      }
     },
     {
       header: 'Supplier',
@@ -232,25 +305,19 @@ const ProductList = () => {
     }
   ];
 
-  if (loading && products.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Products</h1>
-        <p className="text-gray-600">Manage your product inventory</p>
+    <div className="space-y-6">
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Products Catalog</h1>
+        <p className="text-slate-500 text-xs md:text-sm">Manage and register agricultural products, pricing, and supplier info.</p>
       </div>
 
       {/* Form Section */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 className="text-lg font-semibold mb-4">{isEditing ? 'Edit Product' : 'Add New Product'}</h2>
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
+          {isEditing ? '⚡ Edit Product details' : '➕ Add New Product'}
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Product Name"
@@ -258,7 +325,7 @@ const ProductList = () => {
               name="name"
               value={formData.name}
               onChange={handleFormChange}
-              placeholder="Enter product name"
+              placeholder="e.g. Urea 50kg"
               required
             />
             
@@ -275,7 +342,7 @@ const ProductList = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Select
               label="Supplier"
               name="supplier"
@@ -288,17 +355,13 @@ const ProductList = () => {
               required
             />
 
-            <Input
-              label="Price (₹)"
-              type="number"
-              name="price"
-              value={formData.price}
+            <Select
+              label="Unit of Measurement"
+              name="unit"
+              value={formData.unit}
               onChange={handleFormChange}
-              placeholder="0.00"
+              options={PRODUCT_UNITS}
               required
-              min="0"
-              step="0.01"
-              error={fieldErrors.price}
             />
 
             <Input
@@ -310,21 +373,10 @@ const ProductList = () => {
               placeholder="0"
               required
               min="0"
-              disabled={isEditing} // usually stock is updated via purchases/sales after initial creation
+              disabled={isEditing}
               error={fieldErrors.stock}
             />
 
-            <Select
-              label="Unit of Measurement"
-              name="unit"
-              value={formData.unit}
-              onChange={handleFormChange}
-              options={PRODUCT_UNITS}
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Reorder Level"
               type="number"
@@ -336,23 +388,80 @@ const ProductList = () => {
               min="0"
               error={fieldErrors.reorderLevel}
             />
-
-            <div className="flex flex-col">
-              <label className="block text-gray-700 text-sm font-medium mb-2">
-                Description (Optional)
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleFormChange}
-                placeholder="Enter product details"
-                rows="1"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
           </div>
 
-          <div className="flex gap-3 pt-4 border-t border-gray-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Purchase Price (₹)"
+              type="number"
+              name="purchasePrice"
+              value={formData.purchasePrice}
+              onChange={handleFormChange}
+              placeholder="0.00"
+              required
+              min="0"
+              step="0.01"
+              error={fieldErrors.purchasePrice}
+            />
+
+            <Input
+              label="Selling Price (₹)"
+              type="number"
+              name="sellingPrice"
+              value={formData.sellingPrice}
+              onChange={handleFormChange}
+              placeholder="0.00"
+              required
+              min="0"
+              step="0.01"
+              error={fieldErrors.sellingPrice}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Input
+              label="Batch Number"
+              type="text"
+              name="batchNumber"
+              value={formData.batchNumber}
+              onChange={handleFormChange}
+              placeholder="e.g. BATCH-101"
+            />
+
+            <Input
+              label="Manufacture Date"
+              type="date"
+              name="manufactureDate"
+              value={formData.manufactureDate}
+              onChange={handleFormChange}
+              error={fieldErrors.manufactureDate}
+            />
+
+            <Input
+              label="Expiry Date"
+              type="date"
+              name="expiryDate"
+              value={formData.expiryDate}
+              onChange={handleFormChange}
+              error={fieldErrors.expiryDate}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-slate-700 text-xs font-semibold uppercase tracking-wider">
+              Description (Optional)
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleFormChange}
+              placeholder="Enter product details..."
+              rows="2"
+              className="w-full px-3.5 py-2.5 bg-white text-sm text-slate-800 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all hover:border-slate-300"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-4 border-t border-slate-100">
             <Button type="submit" variant="primary" disabled={formLoading}>
               {formLoading ? 'Saving...' : isEditing ? 'Update Product' : 'Add Product'}
             </Button>
@@ -370,11 +479,31 @@ const ProductList = () => {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Product List</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft space-y-4">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Inventory Listings</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {categoryFilter ? 'Showing products from the selected category.' : 'Showing all product categories.'}
+            </p>
+          </div>
+          <Select
+            label="Filter by Category"
+            name="categoryFilter"
+            value={categoryFilter}
+            onChange={handleCategoryFilterChange}
+            options={categories.map((cat) => ({
+              value: cat._id,
+              label: cat.name
+            }))}
+            placeholder="All Categories"
+            className="mb-0 md:w-64"
+          />
+        </div>
         <Table 
           columns={columns} 
           data={products} 
+          loading={loading}
           onEdit={handleEdit} 
           onDelete={handleDelete} 
           pagination={pagination} 

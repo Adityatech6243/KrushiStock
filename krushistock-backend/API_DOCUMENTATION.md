@@ -508,10 +508,164 @@ Request:
 }
 ```
 
+## WhatsApp Business API Integration
+
+All routes except Webhook and Simulator require a JWT token in the Authorization header.
+
+### 1. Webhook Verification (Meta API challenge)
+**GET** `/v1/whatsapp/webhook`
+
+Query Parameters:
+- `hub.mode`: `subscribe`
+- `hub.verify_token`: Verification token configured in settings
+- `hub.challenge`: Random challenge string sent by Meta
+
+Response:
+- Returns the challenge string to verify webhook authenticity.
+
+---
+
+### 2. Webhook Event Ingestion
+**POST** `/v1/whatsapp/webhook`
+
+Processes status updates (`sent`, `delivered`, `read`, `failed`) and incoming messages from Meta.
+
+---
+
+### 3. Webhook simulation (Developer testing)
+**POST** `/v1/whatsapp/webhook/simulate-receive`
+
+Allows you to trigger mock incoming messages or status changes locally.
+
+Request (Incoming Message):
+```json
+{
+  "eventType": "incoming_message",
+  "phone": "919876543210",
+  "text": "Hello, is Urea Premium in stock?"
+}
+```
+
+Request (Message Status Update):
+```json
+{
+  "eventType": "status_update",
+  "messageId": "wamid.doc.72r611g2pyy",
+  "status": "read"
+}
+```
+
+---
+
+### 4. Fetch/Update WhatsApp Configuration
+**GET** `/v1/whatsapp/settings`  
+**PUT** `/v1/whatsapp/settings`
+
+Allows administrators/staff to view or change API credentials, alert phone numbers, and features.
+
+PUT Request:
+```json
+{
+  "accessToken": "EAA...",
+  "phoneNumberId": "123456789...",
+  "businessAccountId": "987654321...",
+  "webhookVerifyToken": "my_custom_token",
+  "adminPhoneNumber": "919876543210",
+  "lowStockAlertsEnabled": true,
+  "paymentRemindersEnabled": true,
+  "catalogSharingEnabled": true,
+  "lowStockThreshold": 15
+}
+```
+
+---
+
+### 5. Fetch Message History Logs
+**GET** `/v1/whatsapp/logs`
+
+Query Parameters:
+- `page`: Page number (default: 1)
+- `limit`: Logs per page (default: 20)
+- `status`: Filter by status (`sent`, `received`, `failed`, `delivered`, `read`)
+- `type`: Filter by direction (`sent`, `received`)
+- `phone`: Filter by recipient/sender number
+
+Response:
+```json
+{
+  "success": true,
+  "count": 1,
+  "pagination": {
+    "total": 12,
+    "page": 1,
+    "pages": 1
+  },
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "whatsappMessageId": "wamid.doc.72r611g2pyy",
+      "type": "sent",
+      "from": "System",
+      "to": "919876543210",
+      "messageType": "document",
+      "status": "sent",
+      "content": {
+        "mediaId": "media_yyh1x5dlrz",
+        "caption": "Invoice SAL-TEST-9005",
+        "filename": "invoice-SAL-TEST-9005.pdf"
+      },
+      "statusHistory": [
+        { "status": "sent", "timestamp": "2026-05-22T23:58:00.000Z" }
+      ],
+      "timestamp": "2026-05-22T23:58:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### 6. Retry Failed Message
+**POST** `/v1/whatsapp/logs/:id/retry`
+
+Retries sending a previously failed message.
+
+---
+
+### 7. Share Product Catalog Details
+**POST** `/v1/whatsapp/products/:id/share`
+
+Shares a text representation of product details (name, price, stock availability, description, image) via WhatsApp.
+
+Request:
+```json
+{
+  "phone": "919876543210"
+}
+```
+
+---
+
+### 8. Upload Product Image for Catalog Sharing
+**POST** `/v1/whatsapp/products/:id/image`
+
+Uploads an image file (multipart/form-data) to serve as the catalog illustration.
+
+---
+
+### 9. Manually Trigger Farmer Payment Reminder
+**POST** `/v1/whatsapp/reminders/:id/send`
+
+Manually dispatches a WhatsApp payment reminder to the farmer associated with a pending credit sale.
+
+---
+
 ## Notes
 
-1. All routes except `/auth/login` require authentication
+1. All routes except `/auth/login`, `/v1/whatsapp/webhook`, and `/v1/whatsapp/webhook/simulate-receive` require authentication.
 2. Include JWT token in Authorization header: `Bearer <token>`
-3. Dates should be in ISO 8601 format
-4. Stock is automatically managed on purchases and sales
-5. Low stock threshold can be configured per product
+3. Dates should be in ISO 8601 format.
+4. Stock is automatically managed on purchases and sales.
+5. Low stock threshold can be configured per product.
+6. If credentials in Settings are not configured, WhatsApp services automatically run in **Mock Mode** (logging outputs locally and to the server console instead of executing external API requests).
+

@@ -1,7 +1,14 @@
 import api from './api';
 
-export const getAllProducts = async (page = 1, limit = 10) => {
-  const response = await api.get(`/products?page=${page}&limit=${limit}`);
+export const getAllProducts = async (page = 1, limit = 10, filters = {}) => {
+  const params = new URLSearchParams({
+    page,
+    limit,
+    ...Object.fromEntries(
+      Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    )
+  });
+  const response = await api.get(`/products?${params.toString()}`);
   return response.data;
 };
 

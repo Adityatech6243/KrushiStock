@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getStockOverview } from '../../services/stockService';
 import Table from '../../components/common/Table';
-import Loader from '../../components/common/Loader';
 import { formatCurrency, formatNumber } from '../../utils/helpers';
+import { Package, TrendingUp, AlertTriangle } from 'lucide-react';
 
 const StockOverview = () => {
   const [stockData, setStockData] = useState([]);
@@ -42,26 +42,34 @@ const StockOverview = () => {
       header: 'Product',
       accessor: 'product',
       render: (row) => (
-        <div>
-          <div className="font-medium">{row.product?.name}</div>
-          <div className="text-xs text-gray-500">{row.product?.category?.name}</div>
+        <div className="flex flex-col">
+          <div className="font-semibold text-slate-800 text-sm">{row.product?.name}</div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{row.product?.category?.name || 'Category'}</div>
         </div>
       )
     },
     {
       header: 'Quantity',
       accessor: 'quantity',
-      render: (row) => `${formatNumber(row.quantity)} ${row.unit}`
+      render: (row) => (
+        <span className="font-bold text-slate-700">
+          {formatNumber(row.quantity)} <span className="text-slate-400 font-semibold text-xs">{row.unit}</span>
+        </span>
+      )
     },
     {
       header: 'Unit Price',
       accessor: 'price',
-      render: (row) => formatCurrency(row.price)
+      render: (row) => (
+        <span className="font-medium text-slate-500">{formatCurrency(row.price)}</span>
+      )
     },
     {
       header: 'Total Value',
       accessor: 'value',
-      render: (row) => formatCurrency(row.value || row.quantity * row.price)
+      render: (row) => (
+        <span className="font-bold text-slate-900">{formatCurrency(row.value || row.quantity * row.price)}</span>
+      )
     },
     {
       header: 'Status',
@@ -70,10 +78,10 @@ const StockOverview = () => {
         const isLowStock = row.quantity <= (row.reorderLevel || 10);
         return (
           <span
-            className={`px-2 py-1 rounded text-xs font-medium ${
+            className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
               isLowStock
-                ? 'bg-red-100 text-red-700'
-                : 'bg-green-100 text-green-700'
+                ? 'bg-rose-50 text-rose-700 border-rose-100'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-100'
             }`}
           >
             {isLowStock ? 'Low Stock' : 'In Stock'}
@@ -83,46 +91,58 @@ const StockOverview = () => {
     }
   ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Stock Overview</h1>
-        <p className="text-gray-600">Current inventory status</p>
+    <div className="space-y-6">
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Stock Inventory Overview</h1>
+        <p className="text-slate-500 text-xs md:text-sm">Real-time status of available agricultural stocks and capital distribution.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm text-gray-600 mb-2">Total Stock Value</div>
-          <div className="text-2xl font-bold text-gray-800">
-            {formatCurrency(summary.totalValue)}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+        <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-soft flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Stock Value</span>
+            <div className="text-2xl font-black text-slate-800">
+              {formatCurrency(summary.totalValue)}
+            </div>
+          </div>
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
+            <TrendingUp size={20} className="stroke-[2.5]" />
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm text-gray-600 mb-2">Total Items</div>
-          <div className="text-2xl font-bold text-gray-800">
-            {formatNumber(summary.totalItems)}
+
+        <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-soft flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Items</span>
+            <div className="text-2xl font-black text-slate-800">
+              {formatNumber(summary.totalItems)}
+            </div>
+          </div>
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+            <Package size={20} className="stroke-[2.5]" />
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm text-gray-600 mb-2">Low Stock Items</div>
-          <div className="text-2xl font-bold text-red-600">
-            {formatNumber(summary.lowStockItems)}
+
+        <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-soft flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Low Stock Items</span>
+            <div className="text-2xl font-black text-rose-600">
+              {formatNumber(summary.lowStockItems)}
+            </div>
+            <Link to="/stock/low-stock" className="text-xs font-semibold text-rose-600 hover:text-rose-800 inline-block mt-1">
+              View Low Stock Alerts →
+            </Link>
           </div>
-          <Link to="/stock/low-stock" className="text-sm text-blue-600 hover:underline">
-            View Details →
-          </Link>
+          <div className="p-3 bg-rose-50 text-rose-600 rounded-xl border border-rose-100">
+            <AlertTriangle size={20} className="stroke-[2.5]" />
+          </div>
         </div>
       </div>
 
-      <Table columns={columns} data={stockData} pagination={pagination} onPageChange={handlePageChange} />
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft space-y-4">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Inventory Status List</h2>
+        <Table columns={columns} data={stockData} loading={loading} pagination={pagination} onPageChange={handlePageChange} />
+      </div>
     </div>
   );
 };

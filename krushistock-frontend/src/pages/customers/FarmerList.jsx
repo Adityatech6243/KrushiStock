@@ -5,20 +5,23 @@ import { validatePhone } from '../../utils/validators';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
-import Loader from '../../components/common/Loader';
+import Select from '../../components/common/Select';
+import { Link } from 'react-router-dom';
 
 const FarmerList = () => {
   const [farmers, setFarmers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [villageFilter, setVillageFilter] = useState('');
 
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     email: '',
     village: '',
     district: '',
+    state: 'Maharashtra',
+    soilType: 'Loamy',
     landSize: '',
     crops: ''
   });
@@ -29,12 +32,12 @@ const FarmerList = () => {
 
   useEffect(() => {
     fetchFarmers(pagination.page);
-  }, [pagination.page]);
+  }, [pagination.page, villageFilter]);
 
   const fetchFarmers = async (page = 1) => {
     setLoading(true);
     try {
-      const response = await getAllFarmers(page, 10);
+      const response = await getAllFarmers(page, 10, { village: villageFilter.trim() });
       setFarmers(response.data);
       setPagination(response.pagination || { page: 1, pages: 1, total: 0 });
     } catch (error) {
@@ -46,6 +49,11 @@ const FarmerList = () => {
 
   const handlePageChange = (newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleVillageFilterChange = (e) => {
+    setVillageFilter(e.target.value);
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const handleFormChange = (e) => {
@@ -101,6 +109,8 @@ const FarmerList = () => {
       email: farmer.email || '',
       village: farmer.village || '',
       district: farmer.district || '',
+      state: farmer.state || 'Maharashtra',
+      soilType: farmer.soilType || 'Loamy',
       landSize: farmer.landSize || '',
       crops: farmer.crops || ''
     });
@@ -117,6 +127,8 @@ const FarmerList = () => {
       email: '',
       village: '',
       district: '',
+      state: 'Maharashtra',
+      soilType: 'Loamy',
       landSize: '',
       crops: ''
     });
@@ -161,6 +173,7 @@ const FarmerList = () => {
     { header: 'Name', accessor: 'name' },
     { header: 'Phone', accessor: 'phone' },
     { header: 'Village', accessor: 'village' },
+    { header: 'Soil Type', accessor: 'soilType' },
     { header: 'Land Size', accessor: 'landSize' },
     {
       header: 'Total Purchases',
@@ -183,36 +196,42 @@ const FarmerList = () => {
           {row.isActive ? 'Active' : 'Inactive'}
         </button>
       )
+    },
+    {
+      header: 'Recommendations',
+      accessor: '_id',
+      render: (row) => (
+        <Link
+          to={`/dashboard/farmers/${row._id}/recommendations`}
+          className="bg-green-50 text-green-700 hover:bg-green-100 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 w-fit border border-green-200 transition-all hover:shadow-sm"
+        >
+          💡 Recommend
+        </Link>
+      )
     }
   ];
 
-  if (loading && farmers.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Farmers</h1>
-        <p className="text-gray-600">Manage farmer/customer database</p>
+    <div className="space-y-6">
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Farmers Base</h1>
+        <p className="text-slate-500 text-xs md:text-sm">Manage customer profiles, soil conditions, land details, and purchase values.</p>
       </div>
 
       {/* Form Section */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 className="text-lg font-semibold mb-4">{isEditing ? 'Edit Farmer' : 'Add New Farmer'}</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
+          {isEditing ? '⚡ Edit Farmer Profile' : '➕ Register New Farmer'}
+        </h2>
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
               label="Farmer Name"
               type="text"
               name="name"
               value={formData.name}
               onChange={handleFormChange}
-              placeholder="Enter farmer name"
+              placeholder="e.g. Ramesh Patil"
               required
             />
 
@@ -222,18 +241,18 @@ const FarmerList = () => {
               name="phone"
               value={formData.phone}
               onChange={handleFormChange}
-              placeholder="Enter phone number"
+              placeholder="e.g. 9876543210"
               required
               error={fieldErrors.phone}
             />
 
             <Input
-              label="Email"
+              label="Email Address"
               type="email"
               name="email"
               value={formData.email}
               onChange={handleFormChange}
-              placeholder="Enter email address"
+              placeholder="name@email.com"
             />
 
             <Input
@@ -242,7 +261,7 @@ const FarmerList = () => {
               name="village"
               value={formData.village}
               onChange={handleFormChange}
-              placeholder="Enter village name"
+              placeholder="e.g. Hasur"
               required
             />
 
@@ -252,7 +271,25 @@ const FarmerList = () => {
               name="district"
               value={formData.district}
               onChange={handleFormChange}
-              placeholder="Enter district"
+              placeholder="e.g. Kolhapur"
+              required
+            />
+
+            <Input
+              label="State"
+              type="text"
+              name="state"
+              value={formData.state}
+              onChange={handleFormChange}
+              placeholder="Maharashtra"
+            />
+
+            <Select
+              label="Soil Type"
+              name="soilType"
+              value={formData.soilType}
+              onChange={handleFormChange}
+              options={['Black', 'Red', 'Alluvial', 'Sandy', 'Loamy', 'Clayey', 'Laterite', 'Other']}
               required
             />
 
@@ -262,27 +299,27 @@ const FarmerList = () => {
               name="landSize"
               value={formData.landSize}
               onChange={handleFormChange}
-              placeholder="e.g., 5 acres"
+              placeholder="e.g. 5 acres"
             />
           </div>
 
-          <div className="mt-4">
-            <label className="block text-gray-700 text-sm font-medium mb-2">
+          <div className="mt-4 flex flex-col gap-1.5">
+            <label className="text-slate-700 text-xs font-semibold uppercase tracking-wider">
               Crops Grown
             </label>
             <textarea
               name="crops"
               value={formData.crops}
               onChange={handleFormChange}
-              placeholder="e.g., Wheat, Rice, Cotton"
+              placeholder="e.g. Sugarcane, Cotton, Soyabean"
               rows="2"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full px-3.5 py-2.5 bg-white text-sm text-slate-800 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all hover:border-slate-300"
             />
           </div>
 
-          <div className="flex gap-3 mt-4">
+          <div className="flex gap-2.5 mt-6 border-t border-slate-100 pt-4">
             <Button type="submit" variant="primary" disabled={formLoading}>
-              {formLoading ? 'Saving...' : isEditing ? 'Update Farmer' : 'Add Farmer'}
+              {formLoading ? 'Saving...' : isEditing ? 'Update Profile' : 'Add Farmer'}
             </Button>
             {isEditing && (
               <Button
@@ -298,11 +335,28 @@ const FarmerList = () => {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Farmer List</h2>
+      <div className="bg-white rounded-xl border border-slate-100 p-5 md:p-6 shadow-soft space-y-4">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Farmer database</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {villageFilter ? `Showing farmers matching "${villageFilter}".` : 'Showing farmers from all villages.'}
+            </p>
+          </div>
+          <Input
+            label="Filter by Village"
+            type="text"
+            name="villageFilter"
+            value={villageFilter}
+            onChange={handleVillageFilterChange}
+            placeholder="Type village name..."
+            className="mb-0 md:w-64"
+          />
+        </div>
         <Table 
           columns={columns} 
           data={farmers} 
+          loading={loading}
           onEdit={handleEdit} 
           onDelete={handleDelete} 
           pagination={pagination} 

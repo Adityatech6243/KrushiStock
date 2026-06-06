@@ -33,6 +33,36 @@ const farmerSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  fullName: {
+    type: String,
+    trim: true
+  },
+  mobile: {
+    type: String,
+    trim: true
+  },
+  state: {
+    type: String,
+    default: 'Maharashtra',
+    trim: true
+  },
+  soilType: {
+    type: String,
+    enum: ['Black', 'Red', 'Alluvial', 'Sandy', 'Loamy', 'Clayey', 'Laterite', 'Other'],
+    default: 'Loamy'
+  },
+  cropTypes: {
+    type: [String],
+    default: []
+  },
+  purchaseHistory: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product'
+  }],
+  preferredProducts: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product'
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -54,5 +84,10 @@ const farmerSchema = new mongoose.Schema({
     ref: 'User'
   }
 });
+
+// Indexes for query optimization
+farmerSchema.index({ cropTypes: 1 });
+farmerSchema.index({ village: 1 });
+farmerSchema.index({ soilType: 1 });
 
 module.exports = mongoose.model('Farmer', farmerSchema);

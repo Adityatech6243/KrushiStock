@@ -4,7 +4,6 @@ import { showConfirm, showSuccess, showError } from '../../utils/alert';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
-import Loader from '../../components/common/Loader';
 
 const CategoryList = () => {
   const [categories, setCategories] = useState([]);
@@ -112,77 +111,76 @@ const CategoryList = () => {
     }
   ];
 
-  if (loading && categories.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader size="lg" />
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Categories</h1>
-        <p className="text-gray-600">Manage product categories</p>
+    <div className="space-y-6">
+      <div className="border-b border-slate-100 pb-4">
+        <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Product Categories</h1>
+        <p className="text-slate-500 text-xs md:text-sm">Classify and organize agricultural inventory listings.</p>
       </div>
 
-      {/* Form Section */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 className="text-lg font-semibold mb-4">{isEditing ? 'Edit Category' : 'Add New Category'}</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Form Section */}
+        <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-soft lg:col-span-1">
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
+            {isEditing ? '⚡ Edit Category' : '➕ Add New Category'}
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               label="Category Name"
               type="text"
               name="name"
               value={formData.name}
               onChange={handleFormChange}
-              placeholder="Enter category name"
+              placeholder="e.g. Fertilizers"
               required
             />
-            <div className="flex flex-col">
-              <label className="block text-gray-700 text-sm font-medium mb-2">
+            
+            <div className="flex flex-col gap-1.5">
+              <label className="text-slate-700 text-xs font-semibold uppercase tracking-wider">
                 Description
               </label>
               <textarea
                 name="description"
                 value={formData.description}
                 onChange={handleFormChange}
-                placeholder="Enter category description"
-                rows="2"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Enter description..."
+                rows="3"
+                className="w-full px-3.5 py-2.5 bg-white text-sm text-slate-800 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all hover:border-slate-300"
               />
             </div>
-          </div>
-          <div className="flex gap-3 mt-4">
-            <Button type="submit" variant="primary" disabled={formLoading}>
-              {formLoading ? 'Saving...' : isEditing ? 'Update Category' : 'Add Category'}
-            </Button>
-            {isEditing && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={resetForm}
-              >
-                Cancel Edit
+            
+            <div className="flex gap-2 pt-2">
+              <Button type="submit" variant="primary" className="flex-1" disabled={formLoading}>
+                {formLoading ? 'Saving...' : isEditing ? 'Update' : 'Add Category'}
               </Button>
-            )}
-          </div>
-        </form>
-      </div>
+              {isEditing && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={resetForm}
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
+          </form>
+        </div>
 
-      {/* Table Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Category List</h2>
-        <Table 
-          columns={columns} 
-          data={categories} 
-          onEdit={handleEdit} 
-          onDelete={handleDelete} 
-          pagination={pagination} 
-          onPageChange={handlePageChange} 
-        />
+        {/* Table Section */}
+        <div className="lg:col-span-2">
+          <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-soft space-y-4">
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Category Catalog</h2>
+            <Table 
+              columns={columns} 
+              data={categories} 
+              loading={loading}
+              onEdit={handleEdit} 
+              onDelete={handleDelete} 
+              pagination={pagination} 
+              onPageChange={handlePageChange} 
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

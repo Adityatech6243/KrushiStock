@@ -1,47 +1,39 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 require('dotenv').config();
+const User = require('./src/models/User');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/krushistock';
+const ADMIN_NAME = process.env.ADMIN_NAME || 'Admin User';
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 const createAdminUser = async () => {
   try {
+    if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 8) {
+      throw new Error('ADMIN_PASSWORD must be set and contain at least 8 characters');
+    }
+
     await mongoose.connect(MONGO_URI);
     console.log('MongoDB Connected');
 
-    const User = mongoose.model('User', new mongoose.Schema({
-      name: String,
-      username: { type: String, unique: true },
-      email: String,
-      password: String,
-      phone: String,
-      role: String,
-      createdAt: { type: Date, default: Date.now }
-    }));
-
-    const existingAdmin = await User.findOne({ username: 'admin' });
+    const existingAdmin = await User.findOne({ username: ADMIN_USERNAME });
     
     if (existingAdmin) {
       console.log('Admin user already exists!');
       process.exit(0);
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('Admin@123', salt);
-
-    const admin = await User.create({
-      name: 'Admin User',
-      username: 'admin',
-      email: 'adityapatil4703@gmail.com',
-      password: hashedPassword,
-      phone: '7820974939',
+    await User.create({
+      name: ADMIN_NAME,
+      username: ADMIN_USERNAME,
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
       role: 'admin'
     });
 
     console.log('Admin user created successfully!');
-    console.log('Username: admin');
-    console.log('Password: Admin@123');
-    console.log('\nPlease change the password after first login!');
+    console.log(`Username: ${ADMIN_USERNAME}`);
 
     process.exit(0);
   } catch (error) {

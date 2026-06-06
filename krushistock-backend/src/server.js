@@ -20,6 +20,10 @@ const purchaseRoutes = require('./routes/purchaseRoutes');
 const saleRoutes = require('./routes/saleRoutes');
 const farmerRoutes = require('./routes/farmerRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const inventoryRoutes = require('./routes/inventoryRoutes');
+const recommendationRoutes = require('./routes/recommendationRoutes');
+const whatsAppRoutes = require('./routes/whatsAppRoutes');
+const path = require('path');
 
 const app = express();
 
@@ -27,7 +31,11 @@ connectDB();
 
 // Global Security Middleware
 app.use(helmet());
-app.use(cors({ origin: CLIENT_URL, credentials: true }));
+app.use(cors({
+  origin: CLIENT_URL,
+  credentials: true,
+  exposedHeaders: ['Content-Disposition']
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -54,18 +62,35 @@ app.get('/', (req, res) => {
   });
 });
 
+// Static assets serving
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/suppliers', supplierRoutes);
 app.use('/api/v1/stock', stockRoutes);
 app.use('/api/v1/purchases', purchaseRoutes);
+app.use('/api/purchase', purchaseRoutes);
 app.use('/api/v1/sales', saleRoutes);
+app.use('/api/sales', saleRoutes);
 app.use('/api/v1/farmers', farmerRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/whatsapp', whatsAppRoutes);
+
+// Register Expiry & Waste inventory routes under requested path and v1 path
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/v1/inventory', inventoryRoutes);
+
+// Register Recommendation routes
+app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/v1/recommendations', recommendationRoutes);
 
 app.use(errorHandler);
+
+const { initCronJobs } = require('./config/cron');
+initCronJobs();
 
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);

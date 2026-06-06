@@ -17,6 +17,11 @@ export const getSaleById = async (id) => {
 
 export const getSale = getSaleById;
 
+export const getSaleInvoice = async (id) => {
+  const response = await api.get(`/sales/invoice/${id}`);
+  return response.data;
+};
+
 export const updateSale = async (id, saleData) => {
   const response = await api.put(`/sales/${id}`, saleData);
   return response.data;
@@ -26,4 +31,3 @@ export const deleteSale = async (id) => {
   const response = await api.delete(`/sales/${id}`);
   return response.data;
 };
-
