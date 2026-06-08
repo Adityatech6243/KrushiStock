@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { getAllSuppliers, deleteSupplier, updateSupplier, createSupplier } from '../../services/productService';
 import { showConfirm, showSuccess, showError } from '../../utils/alert';
-import { validatePhone } from '../../utils/validators';
+import { validatePhone, validateRequired, validateEmail, validateGst } from '../../utils/validators';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+import { getUserInfo } from '../../utils/auth';
 
 const SupplierList = () => {
+  const isAdmin = getUserInfo()?.role === 'admin';
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
@@ -63,9 +65,18 @@ const SupplierList = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const phoneError = validatePhone(formData.phone);
-    if (phoneError) {
-      setFieldErrors({ phone: phoneError });
+    const errors = {
+      name: validateRequired(formData.name, 'Please enter the supplier name'),
+      contact: validateRequired(formData.contact, "Please enter the contact person's name"),
+      phone: validatePhone(formData.phone, 'Please enter the supplier phone number'),
+      email: validateEmail(formData.email, "Please enter the supplier's email address", true),
+      address: validateRequired(formData.address, 'Please enter the complete supplier address'),
+      gst: validateGst(formData.gst, 'Please enter a valid 15-character GSTIN format')
+    };
+
+    const hasErrors = Object.values(errors).some(err => err && err !== '');
+    if (hasErrors) {
+      setFieldErrors(errors);
       return;
     }
 
@@ -190,7 +201,7 @@ const SupplierList = () => {
         <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
           {isEditing ? '⚡ Edit Supplier details' : '➕ Register New Supplier'}
         </h2>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
               label="Supplier Name"
@@ -200,6 +211,7 @@ const SupplierList = () => {
               onChange={handleFormChange}
               placeholder="e.g. Mahadhan Ltd"
               required
+              error={fieldErrors.name}
             />
 
             <Input
@@ -210,6 +222,7 @@ const SupplierList = () => {
               onChange={handleFormChange}
               placeholder="e.g. Anand Kulkarni"
               required
+              error={fieldErrors.contact}
             />
 
             <Input
@@ -231,6 +244,7 @@ const SupplierList = () => {
               onChange={handleFormChange}
               placeholder="supplier@domain.com"
               required
+              error={fieldErrors.email}
             />
           </div>
 
@@ -242,6 +256,7 @@ const SupplierList = () => {
               value={formData.gst}
               onChange={handleFormChange}
               placeholder="e.g. 27AAAAA1111A1Z1"
+              error={fieldErrors.gst}
             />
           </div>
 
@@ -256,8 +271,13 @@ const SupplierList = () => {
               placeholder="Enter building, street, city..."
               rows="2"
               required
-              className="w-full px-3.5 py-2.5 bg-white text-sm text-slate-800 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all hover:border-slate-300"
+              className={`w-full px-3.5 py-2.5 bg-white text-sm text-slate-800 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                fieldErrors.address 
+                  ? 'border-rose-500 focus:ring-rose-500/20 focus:border-rose-500' 
+                  : 'border-slate-200 hover:border-slate-300 focus:ring-primary-500/20 focus:border-primary-500'
+              }`}
             />
+            {fieldErrors.address && <p className="text-rose-600 text-xs font-medium mt-0.5">{fieldErrors.address}</p>}
           </div>
 
           <div className="flex gap-2.5 mt-6 border-t border-slate-100 pt-4">
@@ -285,7 +305,7 @@ const SupplierList = () => {
           data={suppliers} 
           loading={loading}
           onEdit={handleEdit} 
-          onDelete={handleDelete} 
+          onDelete={isAdmin ? handleDelete : undefined} 
           pagination={pagination} 
           onPageChange={handlePageChange} 
         />

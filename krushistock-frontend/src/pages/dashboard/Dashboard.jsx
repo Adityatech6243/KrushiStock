@@ -14,7 +14,9 @@ import {
   ArrowRight,
   TrendingUp,
   Activity,
-  Sparkles
+  Sparkles,
+  Hourglass,
+  Bell
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -25,24 +27,81 @@ const Dashboard = () => {
     lowStockCount: 0,
     stockByCategory: [],
     salesTrend: [],
-    recentActivity: []
+    recentActivity: [],
+    expiryStats: { expiredCount: 0, nearExpiryCount: 0 },
+    pendingPayments: { count: 0, amount: 0, overdueCount: 0 },
+    reorderValue: { count: 0, value: 0 }
   });
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchDashboardStats();
-  }, []);
 
   const fetchDashboardStats = async () => {
     try {
       const response = await getDashboardStats();
-      setStats(response.data);
+      if (response?.success && response?.data) {
+        setStats(response.data);
+      }
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // 1. Initial HTTP fetch
+    fetchDashboardStats();
+
+    // 2. Establish WebSocket connection
+    let ws = null;
+    let pollInterval = null;
+
+    const connectWS = () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:5000/api/v1`;
+        let wsUrl = apiBase.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '');
+        ws = new WebSocket(wsUrl);
+
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'stats_update') {
+              setStats(message.data);
+            }
+          } catch (e) {
+            console.error('Error parsing WS message:', e);
+          }
+        };
+
+        ws.onclose = () => {
+          console.warn('Dashboard WebSocket closed. Falling back to HTTP polling.');
+          startPolling();
+        };
+
+        ws.onerror = (err) => {
+          console.error('Dashboard WebSocket error:', err);
+          ws.close();
+        };
+      } catch (err) {
+        console.error('Error connecting to WS:', err);
+        startPolling();
+      }
+    };
+
+    const startPolling = () => {
+      if (!pollInterval) {
+        pollInterval = setInterval(() => {
+          fetchDashboardStats();
+        }, 10000); // Poll every 10s as a fallback
+      }
+    };
+
+    connectWS();
+
+    return () => {
+      if (ws) ws.close();
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, []);
 
   const statCards = [
     {
@@ -115,6 +174,73 @@ const Dashboard = () => {
             </Link>
           );
         })}
+      </div>
+
+      {/* Live Compact Widgets */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+        {/* Expiry Card */}
+        <Link 
+          to="/dashboard/expiry-management"
+          className="bg-white rounded-xl shadow-soft border border-slate-100 p-5 hover:shadow-soft-md transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Expiry Tracker</h3>
+            <span className="p-2 bg-rose-50 text-rose-600 rounded-lg border border-rose-100">
+              <Hourglass size={15} />
+            </span>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-rose-600">{stats.expiryStats?.expiredCount || 0}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Expired Items</span>
+            </div>
+            <p className="text-xs text-slate-500 font-semibold">
+              <span className="text-amber-600 font-bold">{stats.expiryStats?.nearExpiryCount || 0}</span> items near expiry (within 30 days)
+            </p>
+          </div>
+        </Link>
+
+        {/* Pending Payments Card */}
+        <Link 
+          to="/sales"
+          className="bg-white rounded-xl shadow-soft border border-slate-100 p-5 hover:shadow-soft-md transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Credit Receivables</h3>
+            <span className="p-2 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
+              <Bell size={15} />
+            </span>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-black text-amber-600">{formatCurrency(stats.pendingPayments?.amount || 0)}</span>
+            </div>
+            <p className="text-xs text-slate-500 font-semibold">
+              <span className="text-amber-600 font-bold">{stats.pendingPayments?.count || 0}</span> credit sales (<span className="text-rose-600 font-bold">{stats.pendingPayments?.overdueCount || 0}</span> overdue)
+            </p>
+          </div>
+        </Link>
+
+        {/* Replenishment Estimation Card */}
+        <Link 
+          to="/stock/low-stock"
+          className="bg-white rounded-xl shadow-soft border border-slate-100 p-5 hover:shadow-soft-md transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Replenishment Cost</h3>
+            <span className="p-2 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100">
+              <ShoppingCart size={15} />
+            </span>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-black text-indigo-600">{formatCurrency(stats.reorderValue?.value || 0)}</span>
+            </div>
+            <p className="text-xs text-slate-500 font-semibold">
+              Estimated cost for <span className="text-indigo-600 font-bold">{stats.reorderValue?.count || 0}</span> low-stock items
+            </p>
+          </div>
+        </Link>
       </div>
 
       {/* Charts Section */}

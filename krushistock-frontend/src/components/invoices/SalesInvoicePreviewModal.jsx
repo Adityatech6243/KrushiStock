@@ -67,10 +67,10 @@ const SalesInvoicePreviewModal = ({
   const items = invoice?.items || [];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto no-print">
-      <div className="min-h-screen bg-slate-950/50 backdrop-blur-sm p-3 md:p-6">
-        <div className="mx-auto max-w-5xl">
-          <div className="no-print mb-3 flex flex-col gap-3 rounded-xl border border-white/10 bg-white p-3 shadow-soft-lg md:flex-row md:items-center md:justify-between">
+    <div className="fixed inset-0 z-50 overflow-y-auto print:absolute print:inset-0 print:overflow-visible">
+      <div className="min-h-screen bg-slate-950/50 backdrop-blur-sm p-3 md:p-6 print:bg-transparent print:p-0 print:backdrop-blur-none">
+        <div className="mx-auto max-w-5xl print:max-w-full print:m-0">
+          <div className="print:hidden no-print mb-3 flex flex-col gap-3 rounded-xl border border-white/10 bg-white p-3 shadow-soft-lg md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-sm font-black uppercase tracking-wider text-slate-800">Sales Invoice Preview</h2>
               <p className="text-xs font-semibold text-slate-400">Review, download, print, or share the generated invoice.</p>
@@ -100,7 +100,7 @@ const SalesInvoicePreviewModal = ({
               <Loader size="lg" />
             </div>
           ) : (
-            <section className="invoice-print-root bg-white p-4 text-black shadow-soft-lg">
+            <section className="invoice-print-root bg-white p-4 text-black shadow-soft-lg print:p-0 print:shadow-none print:border-none">
               <div className="mx-auto max-w-[920px] border-2 border-black bg-white font-sans text-[12px] leading-tight">
                 <div className="grid grid-cols-[90px_1fr_170px] border-b border-black">
                   <div className="flex items-center justify-center p-3">
@@ -109,7 +109,7 @@ const SalesInvoicePreviewModal = ({
                     </div>
                   </div>
                   <div className="py-2 text-center">
-                    <h1 className="text-xl font-black uppercase">{ 'MAHALAXMI SHETI SEVA KENDRA HASUR KHURD'}</h1>
+                    <h1 className="text-xl font-black uppercase">{business.name || 'MAHALAXMI SHETI SEVA KENDRA HASUR KHURD'}</h1>
                     <p className="mt-1 text-sm font-bold">{business.address}</p>
                     <p className="text-xs font-bold">Email: {business.email} | Mob: {business.phone}</p>
                   </div>

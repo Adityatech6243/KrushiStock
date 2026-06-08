@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { getAllCategories, createCategory, updateCategory, deleteCategory } from '../../services/productService';
 import { showConfirm, showSuccess, showError } from '../../utils/alert';
+import { validateRequired } from '../../utils/validators';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+import { getUserInfo } from '../../utils/auth';
 
 const CategoryList = () => {
+  const isAdmin = getUserInfo()?.role === 'admin';
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
   // Form state
   const [formData, setFormData] = useState({ name: '', description: '' });
+  const [fieldErrors, setFieldErrors] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
@@ -39,10 +43,24 @@ const CategoryList = () => {
 
   const handleFormChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (fieldErrors[e.target.name]) {
+      setFieldErrors({ ...fieldErrors, [e.target.name]: '' });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const errors = {
+      name: validateRequired(formData.name, 'Please enter the category name')
+    };
+
+    const hasErrors = Object.values(errors).some(err => err && err !== '');
+    if (hasErrors) {
+      setFieldErrors(errors);
+      return;
+    }
+
     setFormLoading(true);
     try {
       if (isEditing) {
@@ -70,6 +88,7 @@ const CategoryList = () => {
       name: category.name || '',
       description: category.description || ''
     });
+    setFieldErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -77,6 +96,7 @@ const CategoryList = () => {
     setIsEditing(false);
     setEditId(null);
     setFormData({ name: '', description: '' });
+    setFieldErrors({});
   };
 
   const handleDelete = async (category) => {
@@ -124,7 +144,7 @@ const CategoryList = () => {
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
             {isEditing ? '⚡ Edit Category' : '➕ Add New Category'}
           </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <Input
               label="Category Name"
               type="text"
@@ -133,6 +153,7 @@ const CategoryList = () => {
               onChange={handleFormChange}
               placeholder="e.g. Fertilizers"
               required
+              error={fieldErrors.name}
             />
             
             <div className="flex flex-col gap-1.5">
@@ -175,7 +196,7 @@ const CategoryList = () => {
               data={categories} 
               loading={loading}
               onEdit={handleEdit} 
-              onDelete={handleDelete} 
+              onDelete={isAdmin ? handleDelete : undefined} 
               pagination={pagination} 
               onPageChange={handlePageChange} 
             />

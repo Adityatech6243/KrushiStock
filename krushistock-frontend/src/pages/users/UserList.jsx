@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAllUsers, deleteUser, updateUser, createUser } from '../../services/userService';
 import { showConfirm, showSuccess, showError } from '../../utils/alert';
-import { validatePhone } from '../../utils/validators';
+import { validatePhone, validateRequired, validateUsername, validatePassword, validateEmail } from '../../utils/validators';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -81,20 +81,24 @@ const UserList = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (formData.password || !isEditing) {
+    const errors = {
+      name: validateRequired(formData.name, "Please enter the operator's full name"),
+      username: validateUsername(formData.username, 'Please enter a console username'),
+      email: validateEmail(formData.email, "Please enter the operator's email address", true),
+      phone: formData.phone ? validatePhone(formData.phone, "Please enter the operator's mobile number") : '',
+      role: validateRequired(formData.role, 'Please select an assigned role')
+    };
+
+    if (!isEditing || formData.password) {
+      errors.password = validatePassword(formData.password, 'Please enter a secure password', isEditing);
       if (formData.password !== formData.confirmPassword) {
-        setError('Passwords do not match');
-        return;
-      }
-      if (formData.password.length < 6) {
-        setError('Password must be at least 6 characters');
-        return;
+        errors.confirmPassword = 'Passwords do not match';
       }
     }
 
-    const phoneError = validatePhone(formData.phone);
-    if (phoneError) {
-      setFieldErrors({ phone: phoneError });
+    const hasErrors = Object.values(errors).some(err => err && err !== '');
+    if (hasErrors) {
+      setFieldErrors(errors);
       return;
     }
 
@@ -287,7 +291,7 @@ const UserList = () => {
           <UserPlus size={16} className="text-primary-600" />
           {isEditing ? 'Modify Operator Credentials' : 'Register New Operator'}
         </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
               label="Full Name"
@@ -297,6 +301,7 @@ const UserList = () => {
               onChange={handleFormChange}
               placeholder="e.g. Aditya Patil"
               required
+              error={fieldErrors.name}
             />
 
             <Input
@@ -318,6 +323,7 @@ const UserList = () => {
               onChange={handleFormChange}
               placeholder="e.g. aditya_operator"
               required
+              error={fieldErrors.username}
             />
 
             <Input
@@ -328,6 +334,7 @@ const UserList = () => {
               onChange={handleFormChange}
               placeholder="e.g. aditya@gmail.com"
               required
+              error={fieldErrors.email}
             />
           </div>
 
@@ -343,6 +350,7 @@ const UserList = () => {
                   { value: USER_ROLES.STAFF, label: 'Staff (Billing & Stock)' }
                 ]}
                 required
+                error={fieldErrors.role}
               />
             </div>
 
@@ -354,6 +362,7 @@ const UserList = () => {
               onChange={handleFormChange}
               placeholder={isEditing ? "•••••• (leave blank to keep)" : "•••••• (min 6 chars)"}
               required={!isEditing}
+              error={fieldErrors.password}
             />
 
             <Input
@@ -364,6 +373,7 @@ const UserList = () => {
               onChange={handleFormChange}
               placeholder="••••••"
               required={!isEditing && formData.password.length > 0}
+              error={fieldErrors.confirmPassword}
             />
           </div>
 

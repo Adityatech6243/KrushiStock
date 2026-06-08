@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getNearExpiryProducts, getExpiredProducts, getDeadStockProducts, updateStockStatuses, getWasteAnalytics } from '../../services/inventoryService';
 import { updateProduct, getAllCategories } from '../../services/productService';
+import { updateStock, recordStockAdjustment } from '../../services/stockService';
 import { showConfirm, showSuccess, showError } from '../../utils/alert';
 import { formatCurrency } from '../../utils/helpers';
 import Table from '../../components/common/Table';
@@ -41,7 +42,7 @@ const ExpiryManagement = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await getAllCategories();
+      const response = await getAllCategories(1, 100000);
       setCategories(response.data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -138,10 +139,7 @@ const ExpiryManagement = () => {
 
     if (isConfirmed) {
       try {
-        await updateProduct(product._id, {
-          stock: 0,
-          quantity: 0
-        });
+        await recordStockAdjustment(product._id, -product.quantity, 'disposal', 'Expired stock disposal');
         showSuccess('Stock Disposed', `${product.name} inventory zeroed out.`);
         await fetchSummary();
         await fetchTabData(pagination.page);

@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { getAllFarmers, deleteFarmer, updateFarmer, createFarmer } from '../../services/farmerService';
 import { showConfirm, showSuccess, showError } from '../../utils/alert';
-import { validatePhone } from '../../utils/validators';
+import { validatePhone, validateRequired, validateEmail } from '../../utils/validators';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
 import { Link } from 'react-router-dom';
+import { getUserInfo } from '../../utils/auth';
 
 const FarmerList = () => {
+  const isAdmin = getUserInfo()?.role === 'admin';
   const [farmers, setFarmers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
@@ -73,9 +75,17 @@ const FarmerList = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const phoneError = validatePhone(formData.phone);
-    if (phoneError) {
-      setFieldErrors({ phone: phoneError });
+    const errors = {
+      name: validateRequired(formData.name, "Please enter the farmer's full name"),
+      phone: validatePhone(formData.phone, "Please enter the farmer's mobile number"),
+      village: validateRequired(formData.village, 'Please enter the village name'),
+      district: validateRequired(formData.district, 'Please enter the district name'),
+      email: validateEmail(formData.email, 'Please enter a valid email address', false)
+    };
+
+    const hasErrors = Object.values(errors).some(err => err && err !== '');
+    if (hasErrors) {
+      setFieldErrors(errors);
       return;
     }
 
@@ -223,7 +233,7 @@ const FarmerList = () => {
         <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
           {isEditing ? '⚡ Edit Farmer Profile' : '➕ Register New Farmer'}
         </h2>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
               label="Farmer Name"
@@ -233,6 +243,7 @@ const FarmerList = () => {
               onChange={handleFormChange}
               placeholder="e.g. Ramesh Patil"
               required
+              error={fieldErrors.name}
             />
 
             <Input
@@ -253,6 +264,7 @@ const FarmerList = () => {
               value={formData.email}
               onChange={handleFormChange}
               placeholder="name@email.com"
+              error={fieldErrors.email}
             />
 
             <Input
@@ -263,6 +275,7 @@ const FarmerList = () => {
               onChange={handleFormChange}
               placeholder="e.g. Hasur"
               required
+              error={fieldErrors.village}
             />
 
             <Input
@@ -273,6 +286,7 @@ const FarmerList = () => {
               onChange={handleFormChange}
               placeholder="e.g. Kolhapur"
               required
+              error={fieldErrors.district}
             />
 
             <Input
@@ -358,7 +372,7 @@ const FarmerList = () => {
           data={farmers} 
           loading={loading}
           onEdit={handleEdit} 
-          onDelete={handleDelete} 
+          onDelete={isAdmin ? handleDelete : undefined} 
           pagination={pagination} 
           onPageChange={handlePageChange} 
         />

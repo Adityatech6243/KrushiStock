@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
-import { getPurchaseReport } from '../../services/reportService';
+import React, { useState, useEffect } from 'react';
+import { getPurchaseReport, exportReport } from '../../services/reportService';
+import { getStoreSettings } from '../../services/settingsService';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import Table from '../../components/common/Table';
 import Loader from '../../components/common/Loader';
-import { formatDate, formatCurrency, formatNumber } from '../../utils/helpers';
+import { formatDate, formatCurrency, formatNumber, exportToCSV } from '../../utils/helpers';
 import { Printer, Download, Search, Calendar, Filter, Truck, DollarSign, Clock, AlertCircle } from 'lucide-react';
 
 const PurchaseReport = () => {
+  const [storeSettings, setStoreSettings] = useState(null);
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -21,6 +23,45 @@ const PurchaseReport = () => {
     pendingPayments: 0
   });
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [exporting, setExporting] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printData, setPrintData] = useState([]);
+
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      const response = await getPurchaseReport({ ...filters, page: 1, limit: 100000 });
+      setPrintData(response.data.items || []);
+    } catch (err) {
+      console.error('Error fetching print data:', err);
+      setPrinting(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchStoreSettings = async () => {
+      try {
+        const res = await getStoreSettings();
+        if (res?.success && res?.data) {
+          setStoreSettings(res.data);
+        }
+      } catch (err) {
+        console.error('Error fetching store settings:', err);
+      }
+    };
+    fetchStoreSettings();
+  }, []);
+
+  useEffect(() => {
+    if (printing && printData.length > 0) {
+      const timer = setTimeout(() => {
+        window.print();
+        setPrinting(false);
+        setPrintData([]);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [printing, printData]);
 
   const handleChange = (e) => {
     setFilters({
@@ -30,6 +71,15 @@ const PurchaseReport = () => {
   };
 
   const generateReport = async (page = 1) => {
+    if (filters.startDate && filters.endDate) {
+      const start = new Date(filters.startDate);
+      const end = new Date(filters.endDate);
+      if (end < start) {
+        showError('Invalid Date Range', 'End date must be greater than or equal to start date.');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const response = await getPurchaseReport({ ...filters, page, limit: 10 });
@@ -90,12 +140,25 @@ const PurchaseReport = () => {
   return (
     <div className="space-y-6">
       {/* Print-only Header */}
-      <div className="hidden print:block mb-8 text-center border-b border-slate-300 pb-5">
-        <h1 className="text-3xl font-black text-slate-800 tracking-tight">KrushiStock</h1>
-        <h2 className="text-lg font-bold text-slate-600 mt-1">Vendor Purchases & Reorders Ledger</h2>
-        <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">Generated on: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</p>
+      <div className="hidden print:block mb-6 text-center border-b border-slate-350 pb-4">
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
+          {storeSettings?.organizationName || 'Mahalaxmi Sheti Seva Kendra'}
+        </h1>
+        <p className="text-xs text-slate-700 font-bold mt-1">
+          {storeSettings?.address || 'Hasur Khurd, Tal. Kagal, Dist. Kolhapur, Maharashtra - 416218'}
+        </p>
+        <p className="text-xs text-slate-600 font-semibold mt-0.5">
+          Phone: {storeSettings?.phone || '7820974939'} | Email: {storeSettings?.email || 'mahalxmiShetiSevaKendra@gmail.com'}
+          {storeSettings?.gst && ` | GSTIN: ${storeSettings.gst}`}
+        </p>
+        <div className="mt-4 border-t border-dashed border-slate-200 pt-3">
+          <h2 className="text-md font-bold text-slate-800">Vendor Purchases & Reorders Ledger</h2>
+          <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+            Generated on: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
+          </p>
+        </div>
         {(filters.startDate || filters.endDate) && (
-          <p className="text-xs text-slate-500 font-bold mt-2 bg-slate-50 py-1 border rounded-lg">
+          <p className="text-[10px] text-slate-500 font-bold mt-2 bg-slate-50 py-1 border rounded-lg max-w-md mx-auto">
             Period: {filters.startDate || 'Beginning'} to {filters.endDate || 'Present'}
           </p>
         )}
@@ -141,7 +204,7 @@ const PurchaseReport = () => {
             onChange={handleChange}
             placeholder="e.g. Mahadhan Corp"
           />
-          <div className="flex items-end">
+          <div className="flex items-end mb-4">
             <Button 
               variant="primary" 
               onClick={() => generateReport(1)} 
@@ -199,29 +262,74 @@ const PurchaseReport = () => {
           </div>
 
           {/* Table Container */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-soft overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-100 shadow-soft overflow-hidden print:hidden">
             <Table columns={columns} data={reportData} pagination={pagination} onPageChange={handlePageChange} />
           </div>
+
+          {/* Print-only Table */}
+          {printData.length > 0 && (
+            <div className="hidden print:block w-full mt-4">
+              <table className="min-w-full text-xs text-left border-collapse border border-slate-300">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-350">
+                    {columns.map((col) => (
+                      <th key={col.header} className="px-3 py-2 border-r border-slate-300 font-black text-slate-800 uppercase tracking-wider">
+                        {col.header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {printData.map((row, idx) => (
+                    <tr key={idx} className="border-b border-slate-250">
+                      {columns.map((col) => (
+                        <td key={col.header} className="px-3 py-2 border-r border-slate-200">
+                          {col.render ? col.render(row) : row[col.accessor]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Buttons Footer */}
           <div className="flex flex-wrap items-center gap-3 print:hidden">
             <Button 
               variant="secondary" 
-              onClick={() => window.print()}
+              onClick={handlePrint}
+              disabled={printing}
               className="flex items-center gap-1.5 text-xs font-bold py-2"
             >
               <Printer size={14} className="stroke-[2.5]" />
-              Print Report
+              {printing ? 'Preparing Print...' : 'Print Report'}
             </Button>
             <Button 
               variant="outline" 
-              onClick={() => {
-                alert("Purchase report data exported to CSV successfully.");
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  const blob = await exportReport('purchases', filters);
+                  const url = window.URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.setAttribute('download', `purchase-report-${new Date().toISOString().split('T')[0]}.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.parentNode.removeChild(link);
+                  window.URL.revokeObjectURL(url);
+                } catch (err) {
+                  console.error('Error exporting CSV:', err);
+                } finally {
+                  setExporting(false);
+                }
               }}
               className="flex items-center gap-1.5 text-xs font-semibold py-2"
             >
               <Download size={14} className="stroke-[2]" />
-              Export to CSV
+              {exporting ? 'Exporting...' : 'Export to CSV'}
             </Button>
           </div>
         </div>

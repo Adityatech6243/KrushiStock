@@ -2,14 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { getAllPurchases, deletePurchase, createPurchase, updatePurchase } from '../../services/purchaseService';
 import { getAllProducts, getAllSuppliers } from '../../services/productService';
 import { showConfirm, showSuccess, showError } from '../../utils/alert';
-import { validatePositiveNumber } from '../../utils/validators';
+import { validatePositiveNumber, validateRequired, validateDateRange } from '../../utils/validators';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
-import { formatDate, formatCurrency } from '../../utils/helpers';
+import { formatDate, formatCurrency, formatDateForInput, getLocalDateString } from '../../utils/helpers';
+import { getUserInfo } from '../../utils/auth';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 
 const PurchaseList = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isAdmin = getUserInfo()?.role === 'admin';
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
@@ -19,23 +25,61 @@ const PurchaseList = () => {
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
     supplier: '',
-    purchaseDate: new Date().toISOString().split('T')[0],
+    purchaseDate: getLocalDateString(),
     paymentMethod: 'Cash',
     paymentStatus: 'Paid'
   });
   const [items, setItems] = useState([
-    { product: '', quantity: '', price: '' }
+    { product: '', quantity: '', price: '', mrp: '', batchNumber: '', manufactureDate: '', expiryDate: '' }
   ]);
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState([]);
+  const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     fetchPurchases(pagination.page);
     fetchSuppliers();
     fetchProducts();
   }, [pagination.page]);
+
+  useEffect(() => {
+    if (
+      location.state?.reorderProduct &&
+      products.length > 0 &&
+      suppliers.length > 0
+    ) {
+      const reorderProduct = location.state.reorderProduct;
+      const reorderSupplier = location.state.reorderSupplier;
+      const suggestedQuantity = location.state.suggestedQuantity || 1;
+
+      setFormData(prev => ({
+        ...prev,
+        supplier: reorderSupplier?._id || ''
+      }));
+
+      // Find the loaded product to get the most up-to-date purchasePrice and mrp
+      const loadedProd = products.find(p => p._id === reorderProduct._id) || reorderProduct;
+
+      setItems([
+        {
+          product: loadedProd._id,
+          quantity: String(suggestedQuantity),
+          price: String(loadedProd.purchasePrice !== undefined ? loadedProd.purchasePrice : loadedProd.price || ''),
+          mrp: String(loadedProd.mrp || 0),
+          batchNumber: loadedProd.batchNumber || '',
+          expiryDate: loadedProd.expiryDate ? formatDateForInput(loadedProd.expiryDate) : ''
+        }
+      ]);
+
+      // Scroll to form smoothly
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Clear state so reload doesn't trigger prefill
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, products, suppliers, navigate, location.pathname]);
 
   const fetchPurchases = async (page = 1) => {
     setLoading(true);
@@ -52,7 +96,7 @@ const PurchaseList = () => {
 
   const fetchSuppliers = async () => {
     try {
-      const response = await getAllSuppliers();
+      const response = await getAllSuppliers(1, 100000);
       setSuppliers(response.data);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
@@ -61,7 +105,7 @@ const PurchaseList = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await getAllProducts();
+      const response = await getAllProducts(1, 100000);
       setProducts(response.data);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -77,6 +121,12 @@ const PurchaseList = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
+    if (formErrors[e.target.name]) {
+      setFormErrors({
+        ...formErrors,
+        [e.target.name]: ''
+      });
+    }
   };
 
   const handleItemChange = (index, field, value) => {
@@ -86,7 +136,11 @@ const PurchaseList = () => {
     if (field === 'product') {
       const product = products.find((p) => p._id === value);
       if (product) {
-        newItems[index].price = product.price;
+        newItems[index].price = product.purchasePrice !== undefined ? product.purchasePrice : product.price;
+        newItems[index].mrp = product.mrp || 0;
+        newItems[index].batchNumber = product.batchNumber || '';
+        newItems[index].manufactureDate = product.manufactureDate ? formatDateForInput(product.manufactureDate) : '';
+        newItems[index].expiryDate = product.expiryDate ? formatDateForInput(product.expiryDate) : '';
       }
     }
 
@@ -96,13 +150,16 @@ const PurchaseList = () => {
       const newErrors = [...fieldErrors];
       if (newErrors[index]) {
         newErrors[index] = { ...newErrors[index], [field]: '' };
+        if (field === 'expiryDate' || field === 'manufactureDate') {
+          newErrors[index].expiryDate = '';
+        }
         setFieldErrors(newErrors);
       }
     }
   };
 
   const addItem = () => {
-    setItems([...items, { product: '', quantity: '', price: '' }]);
+    setItems([...items, { product: '', quantity: '', price: '', mrp: '', batchNumber: '', manufactureDate: '', expiryDate: '' }]);
   };
 
   const removeItem = (index) => {
@@ -120,15 +177,38 @@ const PurchaseList = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    let hasErrors = false;
+    // 1. Validate top-level form fields
+    const todayStr = getLocalDateString();
+    const fErrors = {
+      supplier: validateRequired(formData.supplier, 'Please select the supplier')
+    };
+
+    if (!formData.purchaseDate) {
+      fErrors.purchaseDate = 'Please select the purchase date';
+    } else if (formData.purchaseDate < todayStr) {
+      fErrors.purchaseDate = 'Purchase date cannot be in the past';
+    }
+
+    const hasFormErrors = Object.values(fErrors).some(err => err && err !== '');
+    if (hasFormErrors) {
+      setFormErrors(fErrors);
+      showError('Validation Error', fErrors.supplier || fErrors.purchaseDate || 'Please select a Supplier before checking out.');
+      return;
+    }
+
+    // 2. Validate grid rows
+    let hasRowErrors = false;
     const errorsArray = items.map((item) => {
-      const qtyErr = validatePositiveNumber(item.quantity, 'Quantity');
-      const priceErr = validatePositiveNumber(item.price, 'Price');
-      if (qtyErr || priceErr) hasErrors = true;
-      return { quantity: qtyErr, price: priceErr };
+      const prodErr = validateRequired(item.product, 'Please select a product');
+      const qtyErr = validatePositiveNumber(item.quantity, 'Please enter quantity');
+      const priceErr = validatePositiveNumber(item.price, 'Please enter cost price');
+      const mrpErr = validatePositiveNumber(item.mrp, 'Please enter MRP');
+      const expiryDateErr = validateDateRange(item.manufactureDate, item.expiryDate, 'Expiry date must be after manufacture date');
+      if (prodErr || qtyErr || priceErr || mrpErr || expiryDateErr) hasRowErrors = true;
+      return { product: prodErr, quantity: qtyErr, price: priceErr, mrp: mrpErr, expiryDate: expiryDateErr };
     });
 
-    if (hasErrors) {
+    if (hasRowErrors) {
       setFieldErrors(errorsArray);
       return;
     }
@@ -141,7 +221,11 @@ const PurchaseList = () => {
         items: items.map((item) => ({
           product: item.product,
           quantity: Number(item.quantity),
-          price: Number(item.price)
+          price: Number(item.price),
+          mrp: Number(item.mrp || 0),
+          batchNumber: item.batchNumber || '',
+          manufactureDate: item.manufactureDate || null,
+          expiryDate: item.expiryDate || null
         })),
         totalAmount: calculateTotal()
       };
@@ -168,9 +252,7 @@ const PurchaseList = () => {
     setIsEditing(true);
     setEditId(purchase._id);
     
-    const formattedDate = purchase.date 
-      ? new Date(purchase.date).toISOString().split('T')[0] 
-      : new Date().toISOString().split('T')[0];
+    const formattedDate = formatDateForInput(purchase.purchaseDate) || getLocalDateString();
 
     setFormData({
       supplier: purchase.supplier?._id || '',
@@ -183,13 +265,18 @@ const PurchaseList = () => {
       setItems(purchase.items.map(item => ({
         product: item.product?._id || item.product,
         quantity: item.quantity || '',
-        price: item.price || ''
+        price: item.price || '',
+        mrp: item.mrp || '',
+        batchNumber: item.batchNumber || '',
+        manufactureDate: item.manufactureDate ? formatDateForInput(item.manufactureDate) : '',
+        expiryDate: item.expiryDate ? formatDateForInput(item.expiryDate) : ''
       })));
     } else {
-      setItems([{ product: '', quantity: '', price: '' }]);
+      setItems([{ product: '', quantity: '', price: '', mrp: '', batchNumber: '', manufactureDate: '', expiryDate: '' }]);
     }
     
     setFieldErrors([]);
+    setFormErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -198,12 +285,13 @@ const PurchaseList = () => {
     setEditId(null);
     setFormData({
       supplier: '',
-      purchaseDate: new Date().toISOString().split('T')[0],
+      purchaseDate: getLocalDateString(),
       paymentMethod: 'Cash',
       paymentStatus: 'Paid'
     });
-    setItems([{ product: '', quantity: '', price: '' }]);
+    setItems([{ product: '', quantity: '', price: '', mrp: '', batchNumber: '', manufactureDate: '', expiryDate: '' }]);
     setFieldErrors([]);
+    setFormErrors({});
   };
 
   const handleDelete = async (purchase) => {
@@ -232,8 +320,8 @@ const PurchaseList = () => {
     { header: 'Purchase #', accessor: 'purchaseNumber' },
     {
       header: 'Date',
-      accessor: 'date',
-      render: (row) => formatDate(row.date)
+      accessor: 'purchaseDate',
+      render: (row) => formatDate(row.purchaseDate)
     },
     {
       header: 'Supplier',
@@ -279,7 +367,7 @@ const PurchaseList = () => {
         <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
           {isEditing ? '⚡ Edit Purchase Record' : '🛒 Log New Purchase Batch'}
         </h2>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select
               label="Supplier"
@@ -291,6 +379,7 @@ const PurchaseList = () => {
                 label: sup.name
               }))}
               required
+              error={formErrors.supplier}
             />
 
             <Input
@@ -300,6 +389,8 @@ const PurchaseList = () => {
               value={formData.purchaseDate}
               onChange={handleFormChange}
               required
+              min={getLocalDateString()}
+              error={formErrors.purchaseDate}
             />
           </div>
 
@@ -312,59 +403,121 @@ const PurchaseList = () => {
             </div>
 
             {items.map((item, index) => (
-              <div key={index} className="grid grid-cols-12 gap-4 items-end">
-                <div className="col-span-12 md:col-span-5">
-                  <Select
-                    label={index === 0 ? 'Product' : ''}
-                    name="product"
-                    value={item.product}
-                    onChange={(e) => handleItemChange(index, 'product', e.target.value)}
-                    options={products.filter(p => p.isActive).map((prod) => ({
-                      value: prod._id,
-                      label: `${prod.name} (Stock: ${prod.stock})`
-                    }))}
-                    required
-                  />
+              <div key={index} className="relative p-4 bg-white border border-slate-200/60 rounded-xl space-y-4 hover:border-slate-300 transition-all shadow-sm">
+                {items.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeItem(index)}
+                    className="absolute top-3 right-3 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors z-10"
+                    title="Remove Item"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 md:col-span-4">
+                    <Select
+                      label="Product"
+                      name="product"
+                      value={item.product}
+                      onChange={(e) => handleItemChange(index, 'product', e.target.value)}
+                      options={products.filter(p => p.isActive).map((prod) => ({
+                        value: prod._id,
+                        label: `${prod.name} (Stock: ${prod.stock})`
+                      }))}
+                      required
+                      error={fieldErrors[index]?.product}
+                      className="mb-0"
+                    />
+                  </div>
+
+                  <div className="col-span-12 sm:col-span-4 md:col-span-2">
+                    <Input
+                      label="Batch Number"
+                      type="text"
+                      name="batchNumber"
+                      value={item.batchNumber}
+                      onChange={(e) => handleItemChange(index, 'batchNumber', e.target.value)}
+                      placeholder="Batch"
+                      required
+                      className="mb-0"
+                    />
+                  </div>
+
+                  <div className="col-span-6 sm:col-span-4 md:col-span-3">
+                    <Input
+                      label="Mfg Date"
+                      type="date"
+                      name="manufactureDate"
+                      value={item.manufactureDate}
+                      onChange={(e) => handleItemChange(index, 'manufactureDate', e.target.value)}
+                      error={fieldErrors[index]?.manufactureDate}
+                      className="mb-0"
+                    />
+                  </div>
+
+                  <div className="col-span-6 sm:col-span-4 md:col-span-3">
+                    <Input
+                      label="Expiry Date"
+                      type="date"
+                      name="expiryDate"
+                      value={item.expiryDate}
+                      onChange={(e) => handleItemChange(index, 'expiryDate', e.target.value)}
+                      required
+                      error={fieldErrors[index]?.expiryDate}
+                      className="mb-0"
+                    />
+                  </div>
                 </div>
-                <div className="col-span-6 md:col-span-3">
-                  <Input
-                    label={index === 0 ? 'Quantity' : ''}
-                    type="number"
-                    name="quantity"
-                    value={item.quantity}
-                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                    placeholder="0"
-                    required
-                    min="0"
-                    error={fieldErrors[index]?.quantity}
-                  />
-                </div>
-                <div className="col-span-5 md:col-span-3">
-                  <Input
-                    label={index === 0 ? 'Cost Price' : ''}
-                    type="number"
-                    name="price"
-                    value={item.price}
-                    onChange={(e) => handleItemChange(index, 'price', e.target.value)}
-                    placeholder="0.00"
-                    required
-                    min="0"
-                    step="0.01"
-                    error={fieldErrors[index]?.price}
-                  />
-                </div>
-                <div className="col-span-1 pb-4 flex justify-center">
-                  {items.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      size="sm"
-                      onClick={() => removeItem(index)}
-                      className="p-1 h-9 w-9 rounded-lg"
-                    >
-                      ×
-                    </Button>
-                  )}
+
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 sm:col-span-4">
+                    <Input
+                      label="Quantity"
+                      type="number"
+                      name="quantity"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                      placeholder="0"
+                      required
+                      min="0"
+                      error={fieldErrors[index]?.quantity}
+                      className="mb-0"
+                    />
+                  </div>
+
+                  <div className="col-span-12 sm:col-span-4">
+                    <Input
+                      label="Cost Price"
+                      type="number"
+                      name="price"
+                      value={item.price}
+                      onChange={(e) => handleItemChange(index, 'price', e.target.value)}
+                      placeholder="0.00"
+                      required
+                      min="0"
+                      step="0.01"
+                      error={fieldErrors[index]?.price}
+                      className="mb-0"
+                    />
+                  </div>
+
+                  <div className="col-span-12 sm:col-span-4">
+                    <Input
+                      label="MRP"
+                      type="number"
+                      name="mrp"
+                      value={item.mrp}
+                      onChange={(e) => handleItemChange(index, 'mrp', e.target.value)}
+                      placeholder="0.00"
+                      required
+                      min="0"
+                      step="0.01"
+                      error={fieldErrors[index]?.mrp}
+                      className="mb-0"
+                    />
+                  </div>
                 </div>
               </div>
             ))}
@@ -424,7 +577,7 @@ const PurchaseList = () => {
           data={purchases} 
           loading={loading}
           onEdit={handleEdit}
-          onDelete={handleDelete} 
+          onDelete={isAdmin ? handleDelete : undefined} 
           pagination={pagination} 
           onPageChange={handlePageChange} 
         />

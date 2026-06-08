@@ -3,11 +3,23 @@ import { getLowStockProducts } from '../../services/stockService';
 import Table from '../../components/common/Table';
 import { formatNumber } from '../../utils/helpers';
 import { AlertTriangle, CheckCircle2, Phone, ShoppingCart } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const LowStock = () => {
+  const navigate = useNavigate();
   const [lowStockItems, setLowStockItems] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const handleReorderClick = (row) => {
+    const suggestedQuantity = Math.max((row.reorderLevel || 10) - (row.currentStock || 0), 1);
+    navigate('/purchases', {
+      state: {
+        reorderProduct: row.product,
+        reorderSupplier: row.supplier,
+        suggestedQuantity
+      }
+    });
+  };
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
   useEffect(() => {
@@ -84,6 +96,18 @@ const LowStock = () => {
           return <span className="text-[10px] px-2.5 py-0.5 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-full font-bold shadow-sm inline-block">Low Stock - Restock</span>;
         }
       }
+    },
+    {
+      header: 'Action',
+      accessor: 'reorder',
+      render: (row) => (
+        <button
+          onClick={() => handleReorderClick(row)}
+          className="flex items-center gap-1.5 text-[11px] font-bold text-primary-700 bg-primary-50 border border-primary-150 px-3 py-1.5 rounded-lg hover:bg-primary-100 transition-colors shadow-sm cursor-pointer"
+        >
+          <ShoppingCart size={12} className="stroke-[2.5]" /> Reorder
+        </button>
+      )
     }
   ];
 

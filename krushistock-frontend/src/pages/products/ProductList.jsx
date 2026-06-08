@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { getAllProducts, createProduct, updateProduct, deleteProduct, getAllCategories, getAllSuppliers } from '../../services/productService';
+import { getAllProducts, createProduct, updateProduct, deleteProduct, getAllCategories } from '../../services/productService';
 import { showConfirm, showSuccess, showError } from '../../utils/alert';
-import { validatePositiveNumber } from '../../utils/validators';
+import { validatePositiveNumber, validateRequired, validateDateRange } from '../../utils/validators';
 import Table from '../../components/common/Table';
+import { getUserInfo } from '../../utils/auth';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Select from '../../components/common/Select';
@@ -10,9 +11,9 @@ import { formatCurrency } from '../../utils/helpers';
 import { PRODUCT_UNITS } from '../../utils/constants';
 
 const ProductList = () => {
+  const isAdmin = getUserInfo()?.role === 'admin';
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -21,10 +22,10 @@ const ProductList = () => {
   const [formData, setFormData] = useState({
     name: '',
     category: '',
-    supplier: '',
     price: '',
     sellingPrice: '',
     purchasePrice: '',
+    mrp: '',
     stock: '',
     unit: '',
     reorderLevel: '',
@@ -40,7 +41,6 @@ const ProductList = () => {
 
   useEffect(() => {
     fetchCategories();
-    fetchSuppliers();
   }, []);
 
   useEffect(() => {
@@ -66,15 +66,6 @@ const ProductList = () => {
       setCategories(response.data);
     } catch (error) {
       console.error('Error fetching categories:', error);
-    }
-  };
-
-  const fetchSuppliers = async () => {
-    try {
-      const response = await getAllSuppliers(1, 100);
-      setSuppliers(response.data);
-    } catch (error) {
-      console.error('Error fetching suppliers:', error);
     }
   };
 
@@ -105,19 +96,16 @@ const ProductList = () => {
     e.preventDefault();
 
     const errors = {
-      sellingPrice: validatePositiveNumber(formData.sellingPrice, 'Selling Price'),
-      purchasePrice: validatePositiveNumber(formData.purchasePrice, 'Purchase Price'),
-      stock: validatePositiveNumber(formData.stock, 'Stock'),
-      reorderLevel: validatePositiveNumber(formData.reorderLevel, 'Reorder Level')
+      name: validateRequired(formData.name, 'Please enter the product name'),
+      category: validateRequired(formData.category, 'Please select a category for this product'),
+      unit: validateRequired(formData.unit, 'Please select a unit of measurement'),
+      sellingPrice: validatePositiveNumber(formData.sellingPrice, 'Please enter the selling price'),
+      purchasePrice: validatePositiveNumber(formData.purchasePrice, 'Please enter the purchase price'),
+      mrp: validatePositiveNumber(formData.mrp, 'Please enter the Maximum Retail Price (MRP)'),
+      stock: validatePositiveNumber(formData.stock, 'Please enter the initial stock quantity'),
+      reorderLevel: validatePositiveNumber(formData.reorderLevel, 'Please enter the low stock alert reorder level'),
+      expiryDate: validateDateRange(formData.manufactureDate, formData.expiryDate, 'Expiry date must be after manufacture date')
     };
-
-    if (formData.manufactureDate && formData.expiryDate) {
-      const mDate = new Date(formData.manufactureDate);
-      const eDate = new Date(formData.expiryDate);
-      if (eDate <= mDate) {
-        errors.expiryDate = 'Expiry date must be after manufacture date';
-      }
-    }
 
     const hasErrors = Object.values(errors).some(err => err && err !== '');
     if (hasErrors) {
@@ -157,10 +145,10 @@ const ProductList = () => {
     setFormData({
       name: product.name || '',
       category: product.category?._id || '',
-      supplier: product.supplier?._id || '',
       price: product.price || '',
       sellingPrice: product.sellingPrice || product.price || '',
       purchasePrice: product.purchasePrice || '',
+      mrp: product.mrp || '',
       stock: product.stock !== undefined ? product.stock : (product.quantity || 0),
       unit: product.unit || '',
       reorderLevel: product.reorderLevel || '',
@@ -179,10 +167,10 @@ const ProductList = () => {
     setFormData({
       name: '',
       category: '',
-      supplier: '',
       price: '',
       sellingPrice: '',
       purchasePrice: '',
+      mrp: '',
       stock: '',
       unit: '',
       reorderLevel: '',
@@ -246,6 +234,11 @@ const ProductList = () => {
       render: (row) => formatCurrency(row.sellingPrice || row.price || 0)
     },
     {
+      header: 'MRP',
+      accessor: 'mrp',
+      render: (row) => formatCurrency(row.mrp || 0)
+    },
+    {
       header: 'Stock',
       accessor: 'stock',
       render: (row) => `${row.stock} ${row.unit || ''}`
@@ -282,11 +275,6 @@ const ProductList = () => {
       }
     },
     {
-      header: 'Supplier',
-      accessor: 'supplier',
-      render: (row) => row.supplier?.name || 'N/A'
-    },
-    {
       header: 'Status',
       accessor: 'isActive',
       render: (row) => (
@@ -317,7 +305,7 @@ const ProductList = () => {
         <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">
           {isEditing ? '⚡ Edit Product details' : '➕ Add New Product'}
         </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Product Name"
@@ -327,6 +315,7 @@ const ProductList = () => {
               onChange={handleFormChange}
               placeholder="e.g. Urea 50kg"
               required
+              error={fieldErrors.name}
             />
             
             <Select
@@ -339,22 +328,11 @@ const ProductList = () => {
                 label: cat.name
               }))}
               required
+              error={fieldErrors.category}
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Select
-              label="Supplier"
-              name="supplier"
-              value={formData.supplier}
-              onChange={handleFormChange}
-              options={suppliers.map((sup) => ({
-                value: sup._id,
-                label: sup.name
-              }))}
-              required
-            />
-
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Select
               label="Unit of Measurement"
               name="unit"
@@ -362,6 +340,7 @@ const ProductList = () => {
               onChange={handleFormChange}
               options={PRODUCT_UNITS}
               required
+              error={fieldErrors.unit}
             />
 
             <Input
@@ -390,7 +369,7 @@ const ProductList = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
               label="Purchase Price (₹)"
               type="number"
@@ -415,6 +394,19 @@ const ProductList = () => {
               min="0"
               step="0.01"
               error={fieldErrors.sellingPrice}
+            />
+
+            <Input
+              label="MRP (₹)"
+              type="number"
+              name="mrp"
+              value={formData.mrp}
+              onChange={handleFormChange}
+              placeholder="0.00"
+              required
+              min="0"
+              step="0.01"
+              error={fieldErrors.mrp}
             />
           </div>
 
@@ -505,7 +497,7 @@ const ProductList = () => {
           data={products} 
           loading={loading}
           onEdit={handleEdit} 
-          onDelete={handleDelete} 
+          onDelete={isAdmin ? handleDelete : undefined} 
           pagination={pagination} 
           onPageChange={handlePageChange} 
         />

@@ -22,6 +22,23 @@ export const getSaleInvoice = async (id) => {
   return response.data;
 };
 
+export const getSaleInvoicePDF = async (id) => {
+  const response = await api.get(`/sales/${id}/invoice`, {
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+export const sendInvoiceWhatsApp = async (id) => {
+  const response = await api.post(`/sales/${id}/send-invoice`);
+  return response.data;
+};
+
+export const sendPaymentReminder = async (id) => {
+  const response = await api.post(`/sales/${id}/reminder`);
+  return response.data;
+};
+
 export const updateSale = async (id, saleData) => {
   const response = await api.put(`/sales/${id}`, saleData);
   return response.data;

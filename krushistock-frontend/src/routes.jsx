@@ -1,69 +1,91 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { isAuthenticated } from './utils/auth';
+import { isAuthenticated, getUserInfo } from './utils/auth';
 import Layout from './components/layout/Layout';
+import Loader from './components/common/Loader';
 
-import Login from './pages/auth/Login';
-import Dashboard from './pages/dashboard/Dashboard';
-import CategoryList from './pages/categories/CategoryList';
-import ProductList from './pages/products/ProductList';
-import SupplierList from './pages/suppliers/SupplierList';
-import StockOverview from './pages/stock/StockOverview';
-import LowStock from './pages/stock/LowStock';
-import PurchaseList from './pages/purchases/PurchaseList';
-import SalesList from './pages/sales/SalesList';
-import FarmerList from './pages/customers/FarmerList';
-import StockReport from './pages/reports/StockReport';
-import SalesReport from './pages/reports/SalesReport';
-import PurchaseReport from './pages/reports/PurchaseReport';
-import UserList from './pages/users/UserList';
-import Settings from './pages/settings/Settings';
-import ExpiryManagement from './pages/dashboard/ExpiryManagement';
-import WasteAnalytics from './pages/dashboard/WasteAnalytics';
-import RecommendationsDashboard from './pages/dashboard/RecommendationsDashboard';
-import FarmerRecommendations from './pages/dashboard/FarmerRecommendations';
+// Lazy loaded page components
+const Login = lazy(() => import('./pages/auth/Login'));
+const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
+const CategoryList = lazy(() => import('./pages/categories/CategoryList'));
+const ProductList = lazy(() => import('./pages/products/ProductList'));
+const SupplierList = lazy(() => import('./pages/suppliers/SupplierList'));
+const StockOverview = lazy(() => import('./pages/stock/StockOverview'));
+const LowStock = lazy(() => import('./pages/stock/LowStock'));
+const PurchaseList = lazy(() => import('./pages/purchases/PurchaseList'));
+const SalesList = lazy(() => import('./pages/sales/SalesList'));
+const FarmerList = lazy(() => import('./pages/customers/FarmerList'));
+const StockReport = lazy(() => import('./pages/reports/StockReport'));
+const SalesReport = lazy(() => import('./pages/reports/SalesReport'));
+const PurchaseReport = lazy(() => import('./pages/reports/PurchaseReport'));
+const AdvancedReports = lazy(() => import('./pages/reports/AdvancedReports'));
+const BackgroundJobs = lazy(() => import('./pages/settings/BackgroundJobs'));
+const NotificationInbox = lazy(() => import('./pages/notifications/NotificationInbox'));
+const UserList = lazy(() => import('./pages/users/UserList'));
+const Settings = lazy(() => import('./pages/settings/Settings'));
+const ExpiryManagement = lazy(() => import('./pages/dashboard/ExpiryManagement'));
+const WasteAnalytics = lazy(() => import('./pages/dashboard/WasteAnalytics'));
+const RecommendationsDashboard = lazy(() => import('./pages/dashboard/RecommendationsDashboard'));
+const FarmerRecommendations = lazy(() => import('./pages/dashboard/FarmerRecommendations'));
 
 const ProtectedRoute = ({ children }) => {
   return isAuthenticated() ? children : <Navigate to="/login" />;
 };
 
+const AdminRoute = ({ children }) => {
+  const userInfo = getUserInfo();
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" />;
+  }
+  if (userInfo?.role !== 'admin') {
+    return <Navigate to="/dashboard" />;
+  }
+  return children;
+};
+
 const AppRoutes = () => {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      
-      <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route index element={<Dashboard />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="dashboard/expiry-management" element={<ExpiryManagement />} />
-        <Route path="dashboard/waste-analytics" element={<WasteAnalytics />} />
-        <Route path="dashboard/recommendations" element={<RecommendationsDashboard />} />
-        <Route path="dashboard/farmers/:id/recommendations" element={<FarmerRecommendations />} />
+    <Suspense fallback={<Loader fullScreen={true} />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
         
-        <Route path="categories" element={<CategoryList />} />
-        
-        <Route path="products" element={<ProductList />} />
-        
-        <Route path="suppliers" element={<SupplierList />} />
-        
-        <Route path="stock" element={<StockOverview />} />
-        <Route path="stock/low-stock" element={<LowStock />} />
-        
-        <Route path="purchases" element={<PurchaseList />} />
-        
-        <Route path="sales" element={<SalesList />} />
-        
-        <Route path="farmers" element={<FarmerList />} />
-        
-        <Route path="reports/stock" element={<StockReport />} />
-        <Route path="reports/sales" element={<SalesReport />} />
-        <Route path="reports/purchase" element={<PurchaseReport />} />
-        
-        <Route path="users" element={<UserList />} />
-        
-        <Route path="settings" element={<Settings />} />
-      </Route>
-    </Routes>
+        <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="dashboard/expiry-management" element={<ExpiryManagement />} />
+          <Route path="dashboard/waste-analytics" element={<WasteAnalytics />} />
+          <Route path="dashboard/recommendations" element={<RecommendationsDashboard />} />
+          <Route path="dashboard/farmers/:id/recommendations" element={<FarmerRecommendations />} />
+          
+          <Route path="categories" element={<CategoryList />} />
+          
+          <Route path="products" element={<ProductList />} />
+          
+          <Route path="suppliers" element={<SupplierList />} />
+          
+          <Route path="stock" element={<StockOverview />} />
+          <Route path="stock/low-stock" element={<LowStock />} />
+          
+          <Route path="purchases" element={<PurchaseList />} />
+          
+          <Route path="sales" element={<SalesList />} />
+          
+          <Route path="farmers" element={<FarmerList />} />
+          
+          <Route path="reports/stock" element={<StockReport />} />
+          <Route path="reports/sales" element={<SalesReport />} />
+          <Route path="reports/purchase" element={<PurchaseReport />} />
+          <Route path="reports/advanced" element={<AdvancedReports />} />
+          
+          <Route path="notifications" element={<NotificationInbox />} />
+          
+          <Route path="users" element={<AdminRoute><UserList /></AdminRoute>} />
+          
+          <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
+          <Route path="settings/jobs" element={<AdminRoute><BackgroundJobs /></AdminRoute>} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 };
 

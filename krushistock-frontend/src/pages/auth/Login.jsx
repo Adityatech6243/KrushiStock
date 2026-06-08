@@ -70,10 +70,10 @@ const Login = () => {
     const passwordRegex = /^.{6,}$/;
 
     if (!formData.username.trim()) {
-      errors.username = 'Please enter your username.';
+      errors.username = 'Please enter your console username.';
       isValid = false;
     } else if (!usernameRegex.test(formData.username)) {
-      errors.username = 'Please enter valid username.';
+      errors.username = 'Please enter a valid console username (3-20 characters, alphanumeric or underscores).';
       isValid = false;
     }
 
@@ -81,13 +81,13 @@ const Login = () => {
       errors.password = 'Please enter your password.';
       isValid = false;
     } else if (!passwordRegex.test(formData.password)) {
-      errors.password = 'Please enter valid password.';
+      errors.password = 'Please enter a valid password (at least 6 characters).';
       isValid = false;
     }
 
     if (!isValid) {
       setFieldErrors(errors);
-      showError('Login Failed', 'Please enter valid username and password.');
+      showError('Login Failed', 'Please correct the highlighted fields.');
       return;
     }
 
@@ -138,10 +138,10 @@ const Login = () => {
   });
 
   return (
-    <div className="min-h-screen w-full flex bg-slate-50 font-sans selection:bg-primary-100 selection:text-primary-800 animate-fadeIn">
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-slate-50 font-sans selection:bg-primary-100 selection:text-primary-800 animate-fadeIn">
       
-      {/* LEFT SIDE PANEL - Visually Rich AgriTech Presentation (Visible from md and above) */}
-      <div className="hidden md:flex w-[50%] lg:w-[55%] relative overflow-hidden bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 flex-col justify-between p-8 lg:p-12 text-white">
+      {/* LEFT SIDE PANEL - Visually Rich AgriTech Presentation (Stacked on mobile, side-by-side on desktop) */}
+      <div className="w-full lg:w-[55%] xl:w-[60%] relative overflow-hidden bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 flex flex-col justify-between p-6 sm:p-8 lg:p-12 pb-10 lg:pb-12 text-white">
         
         {/* Animated Gradient Background Glow Blobs */}
         <motion.div 
@@ -176,7 +176,7 @@ const Login = () => {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="text-3xl lg:text-4xl font-extrabold tracking-tight leading-[1.15] text-slate-100"
+              className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight leading-[1.15] text-slate-100"
             >
               Smart Inventory & Billing for <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-emerald-300 to-lime-300">Modern Agriculture Retail</span>.
             </motion.h2>
@@ -190,8 +190,8 @@ const Login = () => {
             </motion.p>
           </div>
 
-          {/* Floating Glass Feature Cards (Grid 2x2) */}
-          <div className="grid grid-cols-2 gap-4 max-w-xl">
+          {/* Floating Glass Feature Cards (Grid 2x2 - Hidden on very small mobiles) */}
+          <div className="hidden sm:grid grid-cols-2 gap-4 max-w-xl">
             
             {/* Card 1: Smart Billing */}
             <motion.div 
@@ -257,7 +257,7 @@ const Login = () => {
         </div>
 
         {/* Store Information Card at Bottom */}
-        <div className="relative z-10 bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl p-3.5 max-w-sm flex items-center gap-3.5">
+        <div className="relative z-10 bg-white/5 border border-white/10 backdrop-blur-sm rounded-xl p-3.5 max-w-sm flex items-center gap-3.5 mt-6 lg:mt-0">
           <div className="h-9 w-9 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center flex-shrink-0">
             <Building size={16} />
           </div>
@@ -276,11 +276,8 @@ const Login = () => {
 
       </div>
 
-      {/* RIGHT SIDE PANEL - Premium Auth Form Section */}
-      <div className="w-full md:w-[50%] lg:w-[45%] flex flex-col justify-center items-center p-6 sm:p-12 md:p-10 lg:p-16 bg-white relative overflow-y-auto">
-        
-        {/* Soft background radial decorator on smaller screens */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-emerald-500/5 blur-[80px] md:hidden pointer-events-none"></div>
+        {/* RIGHT SIDE PANEL - Premium Auth Form Section */}
+      <div className="w-full lg:w-[45%] xl:w-[40%] flex flex-col justify-center items-center p-6 sm:p-10 lg:p-16 bg-white relative z-10 rounded-t-3xl -mt-6 lg:rounded-t-none lg:mt-0">
 
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
@@ -289,16 +286,16 @@ const Login = () => {
           className="w-full max-w-md space-y-6 relative z-10"
         >
           {/* Logo / Heading */}
-          <div className="flex flex-col items-center text-center md:items-start md:text-left space-y-3">
+          <div className="hidden lg:flex flex-col items-center text-center lg:items-start lg:text-left space-y-3">
             <div className="h-11 w-11 rounded-xl bg-gradient-to-tr from-emerald-600 to-primary-500 flex items-center justify-center shadow-md shadow-emerald-100">
               <Sprout size={22} className="text-white animate-pulse" />
             </div>
             
             <div className="space-y-1">
-              <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-800">
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight text-slate-800">
                 MAHALAXMI SHETI SEVA KENDRA
               </h1>
-              <div className="flex items-center justify-center md:justify-start gap-2">
+              <div className="flex items-center justify-center lg:justify-start gap-2">
                 <span className="text-[10px] font-black text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded uppercase tracking-wider">
                   Hasur Khurd
                 </span>
@@ -316,7 +313,7 @@ const Login = () => {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             
             {/* Username Field */}
             <div className="space-y-1.5">

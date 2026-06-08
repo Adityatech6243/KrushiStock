@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Footer from './Footer';
+import Loader from '../common/Loader';
 
 const Layout = () => {
   const location = useLocation();
@@ -23,7 +24,7 @@ const Layout = () => {
       {/* Sidebar mobile overlay backdrop */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-950/20 backdrop-blur-xs z-30 lg:hidden"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -31,7 +32,9 @@ const Layout = () => {
       <div className="flex-1 lg:ml-64 print:ml-0 min-h-screen flex flex-col overflow-hidden">
         <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
         <main className="p-4 md:p-6 flex-1 max-w-7xl w-full mx-auto">
-          <Outlet />
+          <Suspense fallback={<Loader size="lg" />}>
+            <Outlet />
+          </Suspense>
         </main>
         <Footer />
       </div>

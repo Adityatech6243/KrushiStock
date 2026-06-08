@@ -30,7 +30,7 @@ const ForgotPasswordModal = ({ isOpen, onClose }) => {
   const handleRequestOTP = async (e) => {
     e.preventDefault();
     if (!emailOrUsername.trim()) {
-      setErrors({ emailOrUsername: 'Please enter your username or email' });
+      setErrors({ emailOrUsername: 'Please enter your console username or registered email address' });
       return;
     }
     
@@ -52,7 +52,7 @@ const ForgotPasswordModal = ({ isOpen, onClose }) => {
   const handleVerifyOTP = async (e) => {
     e.preventDefault();
     if (!otp.trim()) {
-      setErrors({ otp: 'Please enter the 6-digit OTP' });
+      setErrors({ otp: 'Please enter the 6-digit verification OTP' });
       return;
     }
 
@@ -76,11 +76,11 @@ const ForgotPasswordModal = ({ isOpen, onClose }) => {
     e.preventDefault();
     
     if (newPassword.length < 6) {
-      setErrors({ newPassword: 'Password must be at least 6 characters' });
+      setErrors({ newPassword: 'Please enter a password with at least 6 characters for security' });
       return;
     }
     if (newPassword !== confirmPassword) {
-      setErrors({ confirmPassword: 'Passwords do not match' });
+      setErrors({ confirmPassword: 'Please ensure your passwords match exactly' });
       return;
     }
 
@@ -126,13 +126,18 @@ const ForgotPasswordModal = ({ isOpen, onClose }) => {
           </div>
 
           {step === 1 && (
-            <form onSubmit={handleRequestOTP}>
+            <form onSubmit={handleRequestOTP} noValidate>
               <Input
                 label="Username or Email"
                 type="text"
                 name="emailOrUsername"
                 value={emailOrUsername}
-                onChange={(e) => setEmailOrUsername(e.target.value)}
+                onChange={(e) => {
+                  setEmailOrUsername(e.target.value);
+                  if (errors.emailOrUsername) {
+                    setErrors(prev => ({ ...prev, emailOrUsername: '' }));
+                  }
+                }}
                 placeholder="Enter username or email"
                 error={errors.emailOrUsername}
               />
@@ -143,13 +148,18 @@ const ForgotPasswordModal = ({ isOpen, onClose }) => {
           )}
 
           {step === 2 && (
-            <form onSubmit={handleVerifyOTP}>
+            <form onSubmit={handleVerifyOTP} noValidate>
               <Input
                 label="6-Digit OTP"
                 type="text"
                 name="otp"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value)}
+                onChange={(e) => {
+                  setOtp(e.target.value);
+                  if (errors.otp) {
+                    setErrors(prev => ({ ...prev, otp: '' }));
+                  }
+                }}
                 placeholder="Enter 6-digit OTP"
                 error={errors.otp}
               />
@@ -167,13 +177,18 @@ const ForgotPasswordModal = ({ isOpen, onClose }) => {
           )}
 
           {step === 3 && (
-            <form onSubmit={handleResetPassword}>
+            <form onSubmit={handleResetPassword} noValidate>
               <Input
                 label="New Password"
                 type="password"
                 name="newPassword"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (errors.newPassword) {
+                    setErrors(prev => ({ ...prev, newPassword: '' }));
+                  }
+                }}
                 placeholder="Enter new password"
                 error={errors.newPassword}
               />
@@ -182,7 +197,12 @@ const ForgotPasswordModal = ({ isOpen, onClose }) => {
                 type="password"
                 name="confirmPassword"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (errors.confirmPassword) {
+                    setErrors(prev => ({ ...prev, confirmPassword: '' }));
+                  }
+                }}
                 placeholder="Confirm new password"
                 error={errors.confirmPassword}
               />

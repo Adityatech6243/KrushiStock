@@ -19,3 +19,31 @@ export const getPurchaseReport = async (filters) => {
   const response = await api.get('/reports/purchases', { params: filters });
   return response.data;
 };
+
+export const exportReport = async (type, filters) => {
+  const response = await api.get(`/reports/${type}/export`, {
+    params: { ...filters, format: 'csv' },
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+export const getAdvancedProfitReport = async (filters) => {
+  const response = await api.get('/reports/advanced/profit', { params: filters });
+  return response.data;
+};
+
+export const getAdvancedSupplierPerformance = async (filters) => {
+  const response = await api.get('/reports/advanced/supplier-performance', { params: filters });
+  return response.data;
+};
+
+export const getAdvancedFarmerCreditLedger = async (filters) => {
+  const response = await api.get('/reports/advanced/credit-ledger', { params: filters });
+  return response.data;
+};
+
+export const getAdvancedTaxGstReport = async (filters) => {
+  const response = await api.get('/reports/advanced/tax-gst', { params: filters });
+  return response.data;
+};
