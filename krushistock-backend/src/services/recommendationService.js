@@ -2,6 +2,7 @@ const Farmer = require('../models/Farmer');
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const { getStockMap, getStockQuantity } = require('./stockService');
 
 const cropRules = {
   sugarcane: ['potash', 'urea', 'sugarcane', 'nitrogen', 'phosphate', 'fertilizer', 'monsoon'],
@@ -67,6 +68,7 @@ const getFarmerRecommendations = async (farmerId) => {
   
   // Fetch active products
   const products = await Product.find({ isActive: true, deletedAt: null }).populate('category');
+  const stockMap = await getStockMap(products.map((product) => product._id));
 
   // Collaborative filtering: find products bought by other farmers in the same village
   const villageProductIdsSet = new Set();
@@ -176,7 +178,7 @@ const getFarmerRecommendations = async (farmerId) => {
           price: product.price,
           sellingPrice: product.sellingPrice,
           unit: product.unit,
-          quantity: product.quantity,
+          quantity: stockMap.get(product._id.toString()) || 0,
           category: product.category,
           description: product.description,
           stockStatus: product.stockStatus
@@ -215,6 +217,7 @@ const getTrendingRecommendations = async () => {
     trendingProducts.map(async (item) => {
       const product = await Product.findOne({ _id: item._id, deletedAt: null }).populate('category');
       if (!product) return null;
+      const quantity = await getStockQuantity(product._id);
       return {
         product: {
           _id: product._id,
@@ -222,7 +225,7 @@ const getTrendingRecommendations = async () => {
           price: product.price,
           sellingPrice: product.sellingPrice,
           unit: product.unit,
-          quantity: product.quantity,
+          quantity,
           category: product.category
         },
         totalQuantity: item.totalQuantity,
@@ -280,6 +283,7 @@ const getSeasonalRecommendations = async (season) => {
   const seasonKeywords = seasonRules[currentSeason] || [];
   
   const products = await Product.find({ isActive: true, deletedAt: null }).populate('category');
+  const stockMap = await getStockMap(products.map((product) => product._id));
   const seasonalProducts = [];
 
   for (const product of products) {
@@ -301,7 +305,7 @@ const getSeasonalRecommendations = async (season) => {
           price: product.price,
           sellingPrice: product.sellingPrice,
           unit: product.unit,
-          quantity: product.quantity,
+          quantity: stockMap.get(product._id.toString()) || 0,
           category: product.category,
           description: product.description,
           stockStatus: product.stockStatus
@@ -323,6 +327,7 @@ const getCropRecommendations = async (cropName) => {
   const ruleKeywords = cropRules[normalizedCropName] || [];
   
   const products = await Product.find({ isActive: true, deletedAt: null }).populate('category');
+  const stockMap = await getStockMap(products.map((product) => product._id));
   const cropProducts = [];
 
   for (const product of products) {
@@ -351,7 +356,7 @@ const getCropRecommendations = async (cropName) => {
           price: product.price,
           sellingPrice: product.sellingPrice,
           unit: product.unit,
-          quantity: product.quantity,
+          quantity: stockMap.get(product._id.toString()) || 0,
           category: product.category,
           description: product.description,
           stockStatus: product.stockStatus

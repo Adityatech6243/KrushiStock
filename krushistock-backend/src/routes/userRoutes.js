@@ -4,13 +4,14 @@ const { getAllUsers, createUser, updateUser, deleteUser } = require('../controll
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 router.use(protect);
+router.use(authorize('admin'));
 
 router.route('/')
   .get(getAllUsers)
-  .post(authorize('admin'), createUser);
+  .post(createUser);
 
 router.route('/:id')
-  .put(authorize('admin'), updateUser)
-  .delete(authorize('admin'), deleteUser);
+  .put(updateUser)
+  .delete(deleteUser);
 
 module.exports = router;

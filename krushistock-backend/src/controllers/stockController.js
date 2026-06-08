@@ -1,6 +1,9 @@
+const mongoose = require('mongoose');
 const Stock = require('../models/Stock');
 const Product = require('../models/Product');
 const logger = require('../utils/logger');
+const { broadcastStatsUpdate } = require('../services/socketService');
+const { getStockMovements, recordAdjustmentMovement } = require('../services/stockMovementService');
 
 const getAllStock = async (req, res) => {
   try {
@@ -143,41 +146,51 @@ const getLowStock = async (req, res) => {
 const updateStock = async (req, res) => {
   try {
     const { productId, quantity, operation } = req.body;
+    const numericQuantity = Number(quantity);
 
-    let updateQuery = {};
-    let findQuery = { product: productId };
+    if (!productId || !['add', 'subtract', 'set'].includes(operation)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A productId and a valid operation (add, subtract, or set) are required'
+      });
+    }
 
+    if (!Number.isFinite(numericQuantity) || numericQuantity < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity must be a non-negative number'
+      });
+    }
+
+    let diff = 0;
     if (operation === 'add') {
-      updateQuery = { $inc: { quantity: quantity } };
+      diff = numericQuantity;
     } else if (operation === 'subtract') {
-      findQuery.quantity = { $gte: quantity }; // Prevent negative stock atomically
-      updateQuery = { $inc: { quantity: -quantity } };
-    } else if (operation === 'set') {
-      updateQuery = { $set: { quantity: quantity } };
+      diff = -numericQuantity;
+    } else {
+      // set
+      const currentStock = await Stock.findOne({ product: productId });
+      const currentQty = currentStock ? currentStock.quantity : 0;
+      diff = numericQuantity - currentQty;
     }
 
-    const stock = await Stock.findOneAndUpdate(
-      findQuery,
-      updateQuery,
-      { new: true, upsert: operation !== 'subtract' && operation !== 'set' }
-    );
-
-    if (!stock) {
-      if (operation === 'subtract') {
-        return res.status(400).json({
-          success: false,
-          message: 'Insufficient stock or product not found'
-        });
-      }
+    if (diff === 0) {
+      const stock = await Stock.findOne({ product: productId });
+      return res.status(200).json({
+        success: true,
+        data: stock
+      });
     }
 
-    // Set lowStockLimit if newly created
-    if (stock.lowStockLimit === undefined) {
-      stock.lowStockLimit = 10;
-      await stock.save();
-    }
+    const { stock } = await recordAdjustmentMovement({
+      productId,
+      quantity: diff,
+      type: 'adjustment',
+      note: `Legacy Stock update (${operation})`,
+      userId: req.user?.id
+    });
 
-    logger.info(`Stock updated atomically for product: ${productId}`);
+    broadcastStatsUpdate();
 
     res.status(200).json({
       success: true,
@@ -185,6 +198,34 @@ const updateStock = async (req, res) => {
     });
   } catch (error) {
     logger.error(`Update stock error: ${error.message}`);
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+const getMovements = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    
+    const filters = {};
+    if (req.query.productId) {
+      filters.product = req.query.productId;
+    }
+    if (req.query.type) {
+      filters.type = req.query.type;
+    }
+
+    const result = await getStockMovements(page, limit, filters);
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    logger.error(`Get movements error: ${error.message}`);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -192,8 +233,62 @@ const updateStock = async (req, res) => {
   }
 };
 
+const recordAdjustment = async (req, res, next) => {
+  try {
+    const { productId, quantity, type, note } = req.body;
+    
+    if (!productId || quantity === undefined || !type) {
+      return res.status(400).json({
+        success: false,
+        message: 'productId, quantity, and type are required'
+      });
+    }
+
+    const numericQuantity = Number(quantity);
+    if (isNaN(numericQuantity)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity must be a valid number'
+      });
+    }
+
+    if (!['adjustment', 'disposal', 'correction'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type must be adjustment, disposal, or correction'
+      });
+    }
+
+    const { stock, movement } = await recordAdjustmentMovement({
+      productId,
+      quantity: numericQuantity,
+      type,
+      note: note || 'Manual adjustment',
+      userId: req.user?.id
+    });
+
+    broadcastStatsUpdate();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        stock,
+        movement
+      }
+    });
+  } catch (error) {
+    logger.error(`Record adjustment error: ${error.message}`);
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllStock,
   getLowStock,
-  updateStock
+  updateStock,
+  getMovements,
+  recordAdjustment
 };

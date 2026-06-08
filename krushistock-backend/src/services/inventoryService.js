@@ -1,5 +1,6 @@
 const Product = require('../models/Product');
 const logger = require('../utils/logger');
+const { getStockMap } = require('./stockService');
 
 /**
  * Helper to calculate stock status for a single product
@@ -92,14 +93,15 @@ const getNearExpiryProducts = async (page = 1, limit = 10, filters = {}, sortFie
 
     const products = await Product.find(query)
       .populate('category', 'name')
-      .populate('supplier', 'name phone')
       .sort(sort)
       .skip(skip)
       .limit(limit);
+    const stockMap = await getStockMap(products.map((product) => product._id));
 
     // Apply Discount Recommendation Rules
     const data = products.map(product => {
       const p = product.toObject();
+      p.quantity = stockMap.get(product._id.toString()) || 0;
       let suggestedDiscount = 0;
 
       if (p.expiryDate) {
@@ -167,13 +169,14 @@ const getExpiredProducts = async (page = 1, limit = 10, filters = {}, sortField 
 
     const products = await Product.find(query)
       .populate('category', 'name')
-      .populate('supplier', 'name phone')
       .sort(sort)
       .skip(skip)
       .limit(limit);
+    const stockMap = await getStockMap(products.map((product) => product._id));
 
     const data = products.map(product => {
       const p = product.toObject();
+      p.quantity = stockMap.get(product._id.toString()) || 0;
       const wasteValue = Number((p.purchasePrice * p.quantity).toFixed(2));
       return {
         ...p,
@@ -215,13 +218,14 @@ const getDeadStockProducts = async (page = 1, limit = 10, filters = {}, sortFiel
 
     const products = await Product.find(query)
       .populate('category', 'name')
-      .populate('supplier', 'name phone')
       .sort(sort)
       .skip(skip)
       .limit(limit);
+    const stockMap = await getStockMap(products.map((product) => product._id));
 
     const data = products.map(product => {
       const p = product.toObject();
+      p.quantity = stockMap.get(product._id.toString()) || 0;
       const baseDate = p.lastSoldDate ? new Date(p.lastSoldDate) : new Date(p.createdAt);
       const diffTime = today - baseDate;
       const daysInactive = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -255,6 +259,7 @@ const getDeadStockProducts = async (page = 1, limit = 10, filters = {}, sortFiel
 const getWasteAnalytics = async () => {
   try {
     const activeProducts = await Product.find({ deletedAt: null });
+    const stockMap = await getStockMap(activeProducts.map((product) => product._id));
 
     // Summary counters
     let nearExpiryCount = 0;
@@ -280,7 +285,7 @@ const getWasteAnalytics = async () => {
 
     activeProducts.forEach(product => {
       const status = product.stockStatus;
-      const qty = product.quantity || 0;
+      const qty = stockMap.get(product._id.toString()) || 0;
       const cost = product.purchasePrice || 0;
       const value = qty * cost;
       totalInventoryValue += value;

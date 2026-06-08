@@ -7,7 +7,7 @@ const {
   updateSupplier,
   deleteSupplier
 } = require('../controllers/supplierController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 router.use(protect);
 
@@ -18,6 +18,6 @@ router.route('/')
 router.route('/:id')
   .get(getSupplier)
   .put(updateSupplier)
-  .delete(deleteSupplier);
+  .delete(authorize('admin'), deleteSupplier);
 
 module.exports = router;

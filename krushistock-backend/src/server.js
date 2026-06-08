@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
-const { PORT, CLIENT_URL } = require('./config/env');
+const { PORT, CLIENT_URL ,Network_URL } = require('./config/env');
 const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorMiddleware');
 const rateLimit = require('express-rate-limit');
@@ -23,6 +23,9 @@ const reportRoutes = require('./routes/reportRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const recommendationRoutes = require('./routes/recommendationRoutes');
 const whatsAppRoutes = require('./routes/whatsAppRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
+const jobRoutes = require('./routes/jobRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const path = require('path');
 
 const app = express();
@@ -31,8 +34,22 @@ connectDB();
 
 // Global Security Middleware
 app.use(helmet());
+const allowedOrigins = [CLIENT_URL, Network_URL];
 app.use(cors({
-  origin: CLIENT_URL,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if it matches allowed origins or local network patterns
+    const isAllowed = allowedOrigins.includes(origin);
+    const isLocal = /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin);
+    
+    if (isAllowed || isLocal) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   exposedHeaders: ['Content-Disposition']
 }));
@@ -78,6 +95,10 @@ app.use('/api/v1/farmers', farmerRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/whatsapp', whatsAppRoutes);
+app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/v1/jobs', jobRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // Register Expiry & Waste inventory routes under requested path and v1 path
 app.use('/api/inventory', inventoryRoutes);
@@ -92,6 +113,9 @@ app.use(errorHandler);
 const { initCronJobs } = require('./config/cron');
 initCronJobs();
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server running on port ${PORT}`);
 });
+
+const { initWebSocket } = require('./services/socketService');
+initWebSocket(server);

@@ -9,7 +9,7 @@ const invoiceHistorySchema = new mongoose.Schema({
   customer: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Farmer',
-    required: true
+    required: false
   },
   pdfPath: {
     type: String,

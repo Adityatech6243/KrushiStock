@@ -12,6 +12,9 @@ const Reminder = require('../src/models/Reminder');
 const NotificationLog = require('../src/models/NotificationLog');
 const WhatsAppMessage = require('../src/models/WhatsAppMessage');
 const User = require('../src/models/User');
+const { Counter } = require('../src/models/Counter');
+const PurchaseInvoice = require('../src/models/PurchaseInvoice');
+const SaleInvoice = require('../src/models/SaleInvoice');
 
 const farmersMock = require('../mock-data/farmers');
 const suppliersMock = require('../mock-data/suppliers');
@@ -55,6 +58,9 @@ const seedDatabase = async (options = { clearExisting: true }) => {
       await Reminder.deleteMany({});
       await NotificationLog.deleteMany({});
       await WhatsAppMessage.deleteMany({});
+      await PurchaseInvoice.deleteMany({});
+      await SaleInvoice.deleteMany({});
+      await Counter.deleteMany({});
       console.log('Collections cleared successfully.');
     }
 
@@ -127,7 +133,6 @@ const seedDatabase = async (options = { clearExisting: true }) => {
         batchNumber: prodTemplate.batchNumber,
         manufactureDate: new Date('2024-12-01'),
         expiryDate: new Date('2027-12-01'), // Long expiry to test Fresh status
-        supplierName: supplier.name,
         quantity: 0,
         stockStatus: prodTemplate.stockStatus,
         createdBy: creatorId,
@@ -169,9 +174,7 @@ const seedDatabase = async (options = { clearExisting: true }) => {
         // 7a. Seed Purchases for this month (3 purchases per month)
         for (let pIndex = 0; pIndex < 3; pIndex++) {
           const randomSupplier = supplierDocs[Math.floor(Math.random() * supplierDocs.length)];
-          const supplierProducts = productDocs.filter(prod => prod.supplier.toString() === randomSupplier._id.toString());
-          
-          if (supplierProducts.length === 0) continue;
+          const supplierProducts = productDocs;
 
           const date = factory.getRandomDateInMonth(year, month);
           const purData = factory.generatePurchase(purchaseCounter++, randomSupplier, supplierProducts, date);
@@ -190,6 +193,26 @@ const seedDatabase = async (options = { clearExisting: true }) => {
           const date = factory.getRandomDateInMonth(year, month);
           const saleData = factory.generateSale(saleCounter++, randomFarmer, productDocs, date);
           
+          // Set consistent payment fields (75% Paid, 15% Partial, 10% Pending)
+          const totalAmount = saleData.totalAmount;
+          const rand = Math.random();
+          if (rand < 0.75) {
+            saleData.paymentStatus = 'Paid';
+            saleData.amountPaid = totalAmount;
+            saleData.amountDue = 0;
+            saleData.dueDate = null;
+          } else if (rand < 0.9) {
+            saleData.paymentStatus = 'Partial';
+            saleData.amountPaid = Math.round(totalAmount * 0.4);
+            saleData.amountDue = totalAmount - saleData.amountPaid;
+            saleData.dueDate = new Date(date.getTime() + 30 * 24 * 60 * 60 * 1000);
+          } else {
+            saleData.paymentStatus = 'Pending';
+            saleData.amountPaid = 0;
+            saleData.amountDue = totalAmount;
+            saleData.dueDate = new Date(date.getTime() + 30 * 24 * 60 * 60 * 1000);
+          }
+
           // Track quantities
           saleData.items.forEach(item => {
             totalSold[item.product.toString()] += item.quantity;
@@ -209,6 +232,7 @@ const seedDatabase = async (options = { clearExisting: true }) => {
     // We want some products to be low stock and some to be normal
     // Let's decide a target final stock for each product
     const stockDocs = [];
+    const stockQuantityMap = new Map();
     for (const product of productDocs) {
       const pId = product._id.toString();
       const sold = totalSold[pId] || 0;
@@ -240,9 +264,6 @@ const seedDatabase = async (options = { clearExisting: true }) => {
         targetFinalQty += adjustment;
       }
 
-      // Update the Product document's quantity in the database
-      product.quantity = targetFinalQty;
-      
       // Let's determine lastSoldDate: find the latest sale date for this product
       const productSales = sales.filter(s => s.items.some(item => item.product.toString() === pId));
       if (productSales.length > 0) {
@@ -270,9 +291,19 @@ const seedDatabase = async (options = { clearExisting: true }) => {
         product: product._id,
         quantity: targetFinalQty,
         lowStockLimit: product.reorderLevel || 10,
+        batches: [{
+          batchNumber: (product.batchNumber || 'BATCH-SEED').trim(),
+          expiryDate: product.expiryDate || null,
+          manufactureDate: product.manufactureDate || null,
+          quantity: targetFinalQty,
+          purchasePrice: product.purchasePrice || 0,
+          sellingPrice: product.sellingPrice || product.price || 0,
+          mrp: product.mrp || 0
+        }],
         lastUpdated: new Date()
       });
       stockDocs.push(stockDoc);
+      stockQuantityMap.set(product._id.toString(), targetFinalQty);
     }
     console.log(`Seeded ${stockDocs.length} Stock inventory documents.`);
 
@@ -281,6 +312,97 @@ const seedDatabase = async (options = { clearExisting: true }) => {
     const insertedPurchases = await Purchase.insertMany(purchases);
     const insertedSales = await Sale.insertMany(sales);
     console.log(`Successfully seeded ${insertedPurchases.length} purchases and ${insertedSales.length} sales.`);
+
+    // 9a. Seed SaleInvoices
+    console.log('Generating Sale Invoices...');
+    const saleInvoices = [];
+    for (const sale of insertedSales) {
+      const farmer = farmerDocs.find(f => f._id.toString() === sale.customer.toString());
+      const customerName = farmer ? farmer.name : 'Walk-in Customer';
+      
+      const totalAmount = sale.totalAmount;
+      const subtotal = Number((totalAmount / 1.18).toFixed(2));
+      const gstAmount = Number((totalAmount - subtotal).toFixed(2));
+
+      const invoiceProducts = sale.items.map(item => {
+        const product = productDocs.find(p => p._id.toString() === item.product.toString());
+        const prodSubtotal = Number((item.quantity * item.price).toFixed(2));
+        return {
+          productId: item.product,
+          productName: product ? product.name : 'Unknown Product',
+          quantity: item.quantity,
+          price: item.price,
+          batchNumber: product ? product.batchNumber : 'BATCH-SEED',
+          subtotal: prodSubtotal
+        };
+      });
+
+      saleInvoices.push({
+        invoiceNumber: sale.saleNumber,
+        sale: sale._id,
+        customer: sale.customer,
+        customerName,
+        saleDate: sale.saleDate,
+        products: invoiceProducts,
+        subtotal,
+        gstAmount,
+        totalAmount,
+        paymentMethod: sale.paymentMethod,
+        paymentStatus: sale.paymentStatus,
+        status: 'Active',
+        createdAt: sale.saleDate
+      });
+    }
+    const insertedSaleInvoices = await SaleInvoice.insertMany(saleInvoices);
+    console.log(`Seeded ${insertedSaleInvoices.length} Sale Invoices.`);
+
+    // 9b. Seed PurchaseInvoices
+    console.log('Generating Purchase Invoices...');
+    const purchaseInvoices = [];
+    for (const purchase of insertedPurchases) {
+      const supplier = supplierDocs.find(s => s._id.toString() === purchase.supplier.toString());
+      const supplierName = supplier ? supplier.name : 'Unknown Supplier';
+
+      const totalAmount = purchase.totalAmount;
+      const subtotal = Number((totalAmount / 1.18).toFixed(2));
+      const gstAmount = Number((totalAmount - subtotal).toFixed(2));
+
+      const invoiceProducts = purchase.items.map(item => {
+        const product = productDocs.find(p => p._id.toString() === item.product.toString());
+        const itemSubtotal = item.quantity * item.price;
+        return {
+          productId: item.product,
+          productName: product ? product.name : 'Unknown Product',
+          quantity: item.quantity,
+          purchasePrice: item.price,
+          sellingPrice: product ? product.sellingPrice : 0,
+          mrp: product ? product.mrp : 0,
+          gst: 18,
+          batchNumber: item.batchNumber || (product ? product.batchNumber : 'BATCH-SEED'),
+          expiryDate: item.expiryDate || (product ? product.expiryDate : null),
+          manufactureDate: item.manufactureDate || (product ? product.manufactureDate : null),
+          subtotal: Number((itemSubtotal * 1.18).toFixed(2))
+        };
+      });
+
+      purchaseInvoices.push({
+        invoiceNumber: purchase.purchaseNumber,
+        purchase: purchase._id,
+        supplierId: purchase.supplier,
+        supplierName,
+        purchaseDate: purchase.purchaseDate,
+        products: invoiceProducts,
+        subtotal,
+        gstAmount,
+        totalAmount,
+        paymentMethod: purchase.paymentMethod,
+        paymentStatus: purchase.paymentStatus,
+        status: 'Active',
+        createdAt: purchase.purchaseDate
+      });
+    }
+    const insertedPurchaseInvoices = await PurchaseInvoice.insertMany(purchaseInvoices);
+    console.log(`Seeded ${insertedPurchaseInvoices.length} Purchase Invoices.`);
 
     // 10. Seed Invoice Histories and Reminders
     console.log('Generating Invoices and Payment Reminders...');
@@ -295,9 +417,13 @@ const seedDatabase = async (options = { clearExisting: true }) => {
       const invData = factory.generateInvoiceHistory(sale, farmer);
       invoiceDocs.push(invData);
 
-      // Seed Reminder for high value or pending transactions (approx 20% of sales)
-      if (sale.totalAmount > 1500 && Math.random() < 0.25) {
+      // Seed Reminder for pending/partial sales
+      if (sale.paymentStatus !== 'Paid') {
         const remData = factory.generateReminder(sale, farmer);
+        remData.paymentStatus = 'Pending';
+        remData.amountDue = sale.amountDue;
+        remData.dueDate = sale.dueDate;
+        remData.isActive = true;
         reminderDocs.push(remData);
       }
     }
@@ -312,15 +438,18 @@ const seedDatabase = async (options = { clearExisting: true }) => {
     const notificationLogs = [];
 
     // Add low stock logs for the low stock products
-    const lowStockProducts = productDocs.filter(p => p.quantity <= p.reorderLevel);
+    const lowStockProducts = productDocs.filter((product) => {
+      return (stockQuantityMap.get(product._id.toString()) || 0) <= product.reorderLevel;
+    });
     lowStockProducts.forEach(p => {
+      const quantity = stockQuantityMap.get(p._id.toString()) || 0;
       notificationLogs.push(
         factory.generateNotificationLog(
           'low_stock',
           'Admin',
           p._id,
           'Product',
-          `Alert: Product "${p.name}" has reached low stock level. Current quantity: ${p.quantity}`,
+          `Alert: Product "${p.name}" has reached low stock level. Current quantity: ${quantity}`,
           true,
           new Date()
         )

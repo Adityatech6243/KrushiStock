@@ -26,10 +26,27 @@ const purchaseInvoiceProductSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  mrp: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
   gst: {
     type: Number,
     default: 0,
     min: 0
+  },
+  batchNumber: {
+    type: String,
+    default: null
+  },
+  expiryDate: {
+    type: Date,
+    default: null
+  },
+  manufactureDate: {
+    type: Date,
+    default: null
   },
   subtotal: {
     type: Number,
@@ -48,8 +65,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
   purchase: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Purchase',
-    required: true,
-    unique: true
+    required: false
   },
   supplierId: {
     type: mongoose.Schema.Types.ObjectId,

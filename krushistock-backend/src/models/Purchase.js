@@ -15,6 +15,23 @@ const purchaseItemSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0
+  },
+  mrp: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  batchNumber: {
+    type: String,
+    default: null
+  },
+  expiryDate: {
+    type: Date,
+    default: null
+  },
+  manufactureDate: {
+    type: Date,
+    default: null
   }
 });
 
@@ -61,10 +78,43 @@ const purchaseSchema = new mongoose.Schema({
 
 purchaseSchema.pre('validate', async function(next) {
   if (this.isNew && !this.purchaseNumber) {
-    const count = await mongoose.model('Purchase').countDocuments();
-    this.purchaseNumber = `PUR-${String(count + 1).padStart(4, '0')}`;
+    try {
+      const { getNextSequenceValue } = require('./Counter');
+      const seq = await getNextSequenceValue('purchaseNumber', 'Purchase', 'purchaseNumber');
+      this.purchaseNumber = `PUR-${String(seq).padStart(4, '0')}`;
+    } catch (err) {
+      return next(err);
+    }
   }
   next();
+});
+
+purchaseSchema.post('deleteOne', { document: true, query: false }, async function() {
+  const purchaseNumber = this.purchaseNumber;
+  if (purchaseNumber) {
+    const match = purchaseNumber.match(/\d+/);
+    if (match) {
+      const seqVal = parseInt(match[0], 10);
+      try {
+        const { Counter } = require('./Counter');
+        await Counter.findOneAndUpdate(
+          { _id: 'purchaseNumber', seq: seqVal },
+          { $set: { seq: seqVal - 1 } }
+        );
+      } catch (err) {
+        console.error('Error updating purchase counter after delete:', err);
+      }
+    }
+  }
+});
+
+purchaseSchema.post('deleteMany', async function() {
+  try {
+    const { Counter } = require('./Counter');
+    await Counter.deleteOne({ _id: 'purchaseNumber' });
+  } catch (err) {
+    console.error('Error deleting purchase counter after deleteMany:', err);
+  }
 });
 
 module.exports = mongoose.model('Purchase', purchaseSchema);

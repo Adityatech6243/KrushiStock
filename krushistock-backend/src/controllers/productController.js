@@ -2,6 +2,9 @@ const Product = require('../models/Product');
 const Stock = require('../models/Stock');
 const Supplier = require('../models/Supplier');
 const logger = require('../utils/logger');
+const { broadcastStatsUpdate } = require('../services/socketService');
+const { getStockMap } = require('../services/stockService');
+const { mutateStock } = require('../services/stockMovementService');
 
 const calculateStockStatus = (expiryDate, lastSoldDate, createdAt) => {
   const today = new Date();
@@ -42,23 +45,19 @@ const getAllProducts = async (req, res, next) => {
 
     const products = await Product.find(query)
       .populate('category', 'name')
-      .populate('supplier', 'name phone')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
     const productIds = products.map(p => p._id);
-    const stocks = await Stock.find({ product: { $in: productIds } });
-    
-    const stockMap = {};
-    stocks.forEach(stock => {
-      stockMap[stock.product.toString()] = stock.quantity;
-    });
+    const stockMap = await getStockMap(productIds);
 
     const productsWithStock = products.map((product) => {
+      const stockInfo = stockMap.get(product._id.toString()) || { quantity: 0, batches: [] };
       return {
         ...product.toObject(),
-        stock: stockMap[product._id.toString()] || 0
+        stock: stockInfo.quantity,
+        batches: stockInfo.batches
       };
     });
 
@@ -81,8 +80,7 @@ const getAllProducts = async (req, res, next) => {
 const getProduct = async (req, res, next) => {
   try {
     const product = await Product.findOne({ _id: req.params.id, deletedAt: null })
-      .populate('category', 'name')
-      .populate('supplier', 'name phone');
+      .populate('category', 'name');
 
     if (!product) {
       return res.status(404).json({
@@ -97,7 +95,8 @@ const getProduct = async (req, res, next) => {
       success: true,
       data: {
         ...product.toObject(),
-        stock: stock ? stock.quantity : 0
+        stock: stock ? stock.quantity : 0,
+        batches: stock ? (stock.batches || []) : []
       }
     });
   } catch (error) {
@@ -109,19 +108,15 @@ const getProduct = async (req, res, next) => {
 const createProduct = async (req, res, next) => {
   try {
     const { stock: initialStock, ...productData } = req.body;
-    
-    if (req.user) productData.createdBy = req.user.id;
+    const stockQuantity = initialStock === undefined ? 0 : Number(initialStock);
 
-    // Set quantity
-    productData.quantity = initialStock || 0;
-
-    // Resolve supplierName if not provided
-    if (!productData.supplierName && productData.supplier) {
-      const supplier = await Supplier.findById(productData.supplier);
-      if (supplier) {
-        productData.supplierName = supplier.name;
-      }
+    if (!Number.isFinite(stockQuantity) || stockQuantity < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Stock must be a non-negative number'
+      });
     }
+    if (req.user) productData.createdBy = req.user.id;
 
     // Set default price mapping for backward compatibility
     if (productData.sellingPrice && !productData.price) {
@@ -139,17 +134,34 @@ const createProduct = async (req, res, next) => {
 
     const product = await Product.create(productData);
 
-    await Stock.create({
-      product: product._id,
-      quantity: initialStock || 0,
-      lowStockLimit: req.body.reorderLevel || 10
-    });
+    if (stockQuantity > 0) {
+      await mutateStock({
+        productId: product._id,
+        quantity: stockQuantity,
+        type: 'correction',
+        referenceModel: 'Adjustment',
+        referenceId: product._id,
+        note: 'Initial stock entry',
+        userId: req.user?.id
+      });
+    } else {
+      await Stock.create({
+        product: product._id,
+        quantity: 0,
+        lowStockLimit: req.body.reorderLevel ?? 10
+      });
+    }
 
     logger.info(`Product created: ${product.name}`);
 
+    broadcastStatsUpdate();
+
     res.status(201).json({
       success: true,
-      data: product
+      data: {
+        ...product.toObject(),
+        stock: stockQuantity
+      }
     });
   } catch (error) {
     logger.error(`Create product error: ${error.message}`);
@@ -159,29 +171,28 @@ const createProduct = async (req, res, next) => {
 
 const updateProduct = async (req, res, next) => {
   try {
-    const updateData = { ...req.body };
-    if (req.user) updateData.updatedBy = req.user.id;
+    const {
+      stock: requestedStock,
+      quantity: legacyQuantity,
+      ...updateData
+    } = req.body;
+    const requestedQuantity = requestedStock !== undefined ? requestedStock : legacyQuantity;
+    const stockQuantity = requestedQuantity === undefined ? undefined : Number(requestedQuantity);
 
-    // Resolve supplierName if supplier changed and name not provided
-    if (updateData.supplier && !updateData.supplierName) {
-      const supplier = await Supplier.findById(updateData.supplier);
-      if (supplier) {
-        updateData.supplierName = supplier.name;
-      }
+    if (stockQuantity !== undefined && (!Number.isFinite(stockQuantity) || stockQuantity < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Stock must be a non-negative number'
+      });
     }
+
+    if (req.user) updateData.updatedBy = req.user.id;
 
     // Handle price mapping
     if (updateData.sellingPrice && !updateData.price) {
       updateData.price = updateData.sellingPrice;
     } else if (updateData.price && !updateData.sellingPrice) {
       updateData.sellingPrice = updateData.price;
-    }
-
-    // If stock quantity is updated, keep it in sync with Stock collection
-    if (updateData.stock !== undefined) {
-      updateData.quantity = updateData.stock;
-    } else if (updateData.quantity !== undefined) {
-      updateData.stock = updateData.quantity;
     }
 
     // Before updating, we need to calculate the new status.
@@ -205,25 +216,44 @@ const updateProduct = async (req, res, next) => {
       { new: true, runValidators: true }
     );
 
-    if (req.body.reorderLevel) {
+    if (req.body.reorderLevel !== undefined) {
       await Stock.findOneAndUpdate(
         { product: product._id },
-        { lowStockLimit: req.body.reorderLevel }
+        { $set: { lowStockLimit: req.body.reorderLevel } },
+        { upsert: true, runValidators: true }
       );
     }
 
-    if (updateData.quantity !== undefined) {
-      await Stock.findOneAndUpdate(
-        { product: product._id },
-        { quantity: updateData.quantity }
-      );
+    if (stockQuantity !== undefined) {
+      const currentStock = await Stock.findOne({ product: product._id });
+      const currentQty = currentStock ? currentStock.quantity : 0;
+      const diff = stockQuantity - currentQty;
+
+      if (diff !== 0) {
+        await mutateStock({
+          productId: product._id,
+          quantity: diff,
+          type: 'correction',
+          referenceModel: 'Adjustment',
+          referenceId: product._id,
+          note: 'Stock level correction',
+          userId: req.user?.id
+        });
+      }
     }
 
     logger.info(`Product updated: ${product.name}`);
 
+    broadcastStatsUpdate();
+
     res.status(200).json({
       success: true,
-      data: product
+      data: {
+        ...product.toObject(),
+        stock: stockQuantity !== undefined
+          ? stockQuantity
+          : await Stock.findOne({ product: product._id }).then((stock) => stock?.quantity || 0)
+      }
     });
   } catch (error) {
     logger.error(`Update product error: ${error.message}`);
@@ -247,7 +277,12 @@ const deleteProduct = async (req, res, next) => {
     if (req.user) product.updatedBy = req.user.id;
     await product.save();
 
+    // Clean up corresponding Stock document to avoid orphan stock
+    await Stock.deleteOne({ product: product._id });
+
     logger.info(`Product deleted: ${product.name}`);
+
+    broadcastStatsUpdate();
 
     res.status(200).json({
       success: true,

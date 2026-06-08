@@ -6,6 +6,7 @@ const NotificationLog = require('../models/NotificationLog');
 const Reminder = require('../models/Reminder');
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
+const Stock = require('../models/Stock');
 const Farmer = require('../models/Farmer');
 const whatsAppService = require('../services/whatsAppService');
 const logger = require('../utils/logger');
@@ -351,8 +352,14 @@ const shareProductCatalog = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
+    const stock = await Stock.findOne({ product: product._id }).select('quantity');
+    const productWithStock = {
+      ...product.toObject(),
+      quantity: stock?.quantity || 0
+    };
+
     logger.info(`Sharing product ${product.name} with ${phone}`);
-    const result = await whatsAppService.sendProductCatalog(phone, product);
+    const result = await whatsAppService.sendProductCatalog(phone, productWithStock);
 
     if (result.success) {
       return res.status(200).json({
@@ -484,4 +491,3 @@ module.exports = {
   uploadProductImage,
   sendManualSaleInvoice
 };
-

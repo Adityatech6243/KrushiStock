@@ -7,7 +7,7 @@ const {
   updateFarmer,
   deleteFarmer
 } = require('../controllers/farmerController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 router.use(protect);
 
@@ -18,6 +18,6 @@ router.route('/')
 router.route('/:id')
   .get(getFarmer)
   .put(updateFarmer)
-  .delete(deleteFarmer);
+  .delete(authorize('admin'), deleteFarmer);
 
 module.exports = router;

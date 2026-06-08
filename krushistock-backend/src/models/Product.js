@@ -14,7 +14,7 @@ const productSchema = new mongoose.Schema({
   supplier: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Supplier',
-    required: [true, 'Please provide a supplier']
+    default: null
   },
   unit: {
     type: String,
@@ -51,10 +51,6 @@ const productSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  supplierName: {
-    type: String,
-    default: null
-  },
   purchasePrice: {
     type: Number,
     default: 0,
@@ -65,7 +61,7 @@ const productSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
-  quantity: {
+  mrp: {
     type: Number,
     default: 0,
     min: 0

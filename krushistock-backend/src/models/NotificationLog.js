@@ -28,6 +28,10 @@ const notificationLogSchema = new mongoose.Schema({
     enum: ['success', 'failed'],
     default: 'success'
   },
+  isRead: {
+    type: Boolean,
+    default: false
+  },
   error: {
     type: String,
     default: null

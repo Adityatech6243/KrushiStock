@@ -9,7 +9,7 @@ const {
   updatePurchase,
   deletePurchase
 } = require('../controllers/purchaseController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 router.use(protect);
 
@@ -23,6 +23,6 @@ router.get('/invoice/:invoiceNumber', getPurchaseInvoiceByNumber);
 router.route('/:id')
   .get(getPurchase)
   .put(updatePurchase)
-  .delete(deletePurchase);
+  .delete(authorize('admin'), deletePurchase);
 
 module.exports = router;

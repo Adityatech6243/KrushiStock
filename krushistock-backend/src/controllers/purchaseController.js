@@ -2,6 +2,7 @@ const Purchase = require('../models/Purchase');
 const PurchaseInvoice = require('../models/PurchaseInvoice');
 const logger = require('../utils/logger');
 const mongoose = require('mongoose');
+const { broadcastStatsUpdate } = require('../services/socketService');
 const {
   createPurchaseWithInvoice,
   updatePurchaseWithInvoice,
@@ -181,6 +182,8 @@ const createPurchase = async (req, res, next) => {
       logger.error(`Purchase invoice PDF error: ${pdfError.message}`);
     }
 
+    broadcastStatsUpdate();
+
     res.status(201).json({
       success: true,
       data: purchase,
@@ -218,6 +221,8 @@ const updatePurchase = async (req, res, next) => {
       logger.error(`Purchase invoice PDF error: ${pdfError.message}`);
     }
 
+    broadcastStatsUpdate();
+
     res.status(200).json({
       success: true,
       data: purchase,
@@ -247,6 +252,8 @@ const deletePurchase = async (req, res, next) => {
 
     await session.commitTransaction();
     logger.info(`Purchase deleted: ${purchase.purchaseNumber}`);
+
+    broadcastStatsUpdate();
 
     res.status(200).json({
       success: true,

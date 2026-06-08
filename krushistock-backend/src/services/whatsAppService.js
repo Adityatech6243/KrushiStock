@@ -397,20 +397,8 @@ const sendInvoicePdf = async (saleId) => {
       return { success: false, error: 'Customer phone number not available' };
     }
 
-    const fileName = `invoice-${sale.saleNumber}.pdf`;
-    const relativePath = `uploads/invoices/${fileName}`;
-    const absolutePath = path.resolve(__dirname, '../../', relativePath);
-
-    logger.info(`Generating invoice PDF for Sale ${sale.saleNumber}...`);
-    await generateInvoicePDF(sale, absolutePath);
-
-    // Create InvoiceHistory log
-    const invoiceLog = await InvoiceHistory.create({
-      sale: sale._id,
-      customer: sale.customer._id,
-      pdfPath: relativePath,
-      sentStatus: 'Pending'
-    });
+    const { generateAndPersistInvoice } = require('./saleInvoiceService');
+    const { invoiceLog, fileName, filePath: absolutePath } = await generateAndPersistInvoice(sale);
 
     // Upload to WhatsApp
     logger.info(`Uploading invoice PDF to WhatsApp...`);

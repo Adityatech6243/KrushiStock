@@ -1,11 +1,10 @@
 const path = require('path');
 const Purchase = require('../models/Purchase');
 const PurchaseInvoice = require('../models/PurchaseInvoice');
-const Stock = require('../models/Stock');
-const StockMovement = require('../models/StockMovement');
 const Product = require('../models/Product');
 const Supplier = require('../models/Supplier');
 const { generatePurchaseInvoicePDF } = require('../utils/pdfGenerator');
+const { mutateStock } = require('./stockMovementService');
 
 const toNumber = (value, fallback = 0) => {
   const number = Number(value);
@@ -50,6 +49,7 @@ const buildInvoiceProducts = async (items, session) => {
     const quantity = toNumber(item.quantity);
     const purchasePrice = toNumber(item.price);
     const sellingPrice = toNumber(item.sellingPrice, product.sellingPrice || product.price || 0);
+    const mrp = toNumber(item.mrp, product.mrp || 0);
     const gst = toNumber(item.gst);
     const taxableAmount = quantity * purchasePrice;
     const gstValue = taxableAmount * gst / 100;
@@ -60,7 +60,11 @@ const buildInvoiceProducts = async (items, session) => {
       quantity,
       purchasePrice,
       sellingPrice,
+      mrp,
       gst,
+      batchNumber: item.batchNumber || null,
+      expiryDate: item.expiryDate || null,
+      manufactureDate: item.manufactureDate || null,
       subtotal: taxableAmount + gstValue
     };
   });
@@ -81,48 +85,27 @@ const calculateInvoiceTotals = (products) => {
 
 const adjustInventory = async ({ purchase, invoiceProducts, userId, movementType, note, direction = 1, session }) => {
   for (const item of invoiceProducts) {
-    const stock = await Stock.findOne({ product: item.productId }).session(session);
-    const previousQuantity = stock ? stock.quantity : 0;
     const movementQuantity = item.quantity * direction;
-    const newQuantity = previousQuantity + movementQuantity;
+    const productUpdates = direction > 0 ? { purchasePrice: item.purchasePrice, mrp: item.mrp } : null;
 
-    if (newQuantity < 0) {
-      throw new Error(`Insufficient stock while adjusting ${item.productName}`);
-    }
-
-    if (stock) {
-      stock.quantity = newQuantity;
-      stock.lastUpdated = new Date();
-      await stock.save({ session });
-    } else {
-      await Stock.create([{
-        product: item.productId,
-        quantity: newQuantity,
-        lowStockLimit: 10
-      }], { session });
-    }
-
-    await Product.findOneAndUpdate(
-      { _id: item.productId },
-      {
-        $inc: { quantity: movementQuantity },
-        ...(direction > 0 ? { $set: { purchasePrice: item.purchasePrice } } : {})
-      },
-      { session }
-    );
-
-    await StockMovement.create([{
-      product: item.productId,
-      type: movementType,
+    await mutateStock({
+      productId: item.productId,
       quantity: movementQuantity,
-      previousQuantity,
-      newQuantity,
+      type: movementType,
       referenceModel: 'Purchase',
       referenceId: purchase._id,
       referenceNumber: purchase.purchaseNumber,
       note,
-      createdBy: userId
-    }], { session });
+      userId,
+      productUpdates,
+      batchNumber: item.batchNumber || null,
+      expiryDate: item.expiryDate || null,
+      manufactureDate: item.manufactureDate || null,
+      mrp: item.mrp || null,
+      purchasePrice: item.purchasePrice || null,
+      sellingPrice: item.sellingPrice || null,
+      session
+    });
   }
 };
 
@@ -153,7 +136,11 @@ const createPurchaseWithInvoice = async ({ purchaseData, userId, session }) => {
     items: invoiceProducts.map((item) => ({
       product: item.productId,
       quantity: item.quantity,
-      price: item.purchasePrice
+      price: item.purchasePrice,
+      mrp: item.mrp,
+      batchNumber: item.batchNumber,
+      expiryDate: item.expiryDate,
+      manufactureDate: item.manufactureDate
     })),
     totalAmount: totals.totalAmount,
     createdBy: userId
@@ -201,8 +188,7 @@ const updatePurchaseWithInvoice = async ({ purchaseId, purchaseData, userId, ses
     throw new Error('Purchase not found');
   }
 
-  const existingInvoice = await PurchaseInvoice.findOne({ purchase: existingPurchase._id }).session(session);
-  const oldInvoiceProducts = existingInvoice
+  const oldInvoiceProducts = (existingInvoice
     ? existingInvoice.products
     : existingPurchase.items.map((item) => ({
         productId: item.product,
@@ -210,8 +196,24 @@ const updatePurchaseWithInvoice = async ({ purchaseId, purchaseData, userId, ses
         quantity: item.quantity,
         purchasePrice: item.price,
         sellingPrice: 0,
+        mrp: item.mrp || 0,
         gst: 0,
+        batchNumber: item.batchNumber,
+        expiryDate: item.expiryDate,
+        manufactureDate: item.manufactureDate,
         subtotal: item.quantity * item.price
+      }))).map(p => ({
+        productId: p.productId,
+        productName: p.productName || 'Previous purchase item',
+        quantity: p.quantity,
+        purchasePrice: p.purchasePrice,
+        sellingPrice: p.sellingPrice || 0,
+        mrp: p.mrp || 0,
+        gst: p.gst || 0,
+        batchNumber: p.batchNumber,
+        expiryDate: p.expiryDate,
+        manufactureDate: p.manufactureDate,
+        subtotal: p.subtotal
       }));
 
   await adjustInventory({
@@ -239,7 +241,11 @@ const updatePurchaseWithInvoice = async ({ purchaseId, purchaseData, userId, ses
       items: invoiceProducts.map((item) => ({
         product: item.productId,
         quantity: item.quantity,
-        price: item.purchasePrice
+        price: item.purchasePrice,
+        mrp: item.mrp,
+        batchNumber: item.batchNumber,
+        expiryDate: item.expiryDate,
+        manufactureDate: item.manufactureDate
       })),
       totalAmount: totals.totalAmount
     },
@@ -290,7 +296,7 @@ const deletePurchaseWithInvoice = async ({ purchaseId, userId, session }) => {
   }
 
   const invoice = await PurchaseInvoice.findOne({ purchase: purchase._id }).session(session);
-  const invoiceProducts = invoice
+  const invoiceProducts = (invoice
     ? invoice.products
     : purchase.items.map((item) => ({
         productId: item.product,
@@ -299,7 +305,22 @@ const deletePurchaseWithInvoice = async ({ purchaseId, userId, session }) => {
         purchasePrice: item.price,
         sellingPrice: 0,
         gst: 0,
+        batchNumber: item.batchNumber,
+        expiryDate: item.expiryDate,
+        manufactureDate: item.manufactureDate,
         subtotal: item.quantity * item.price
+      }))).map(p => ({
+        productId: p.productId,
+        productName: p.productName || 'Purchase item',
+        quantity: p.quantity,
+        purchasePrice: p.purchasePrice,
+        sellingPrice: p.sellingPrice || 0,
+        mrp: p.mrp || 0,
+        gst: p.gst || 0,
+        batchNumber: p.batchNumber,
+        expiryDate: p.expiryDate,
+        manufactureDate: p.manufactureDate,
+        subtotal: p.subtotal
       }));
 
   await adjustInventory({

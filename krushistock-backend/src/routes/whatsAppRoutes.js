@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 const {
   verifyWebhook,
   handleWebhook,
@@ -71,8 +71,8 @@ router.use(protect);
 
 // Admin Settings Panel Configuration
 router.route('/settings')
-  .get(getWhatsAppSettings)
-  .put(updateWhatsAppSettings);
+  .get(authorize('admin'), getWhatsAppSettings)
+  .put(authorize('admin'), updateWhatsAppSettings);
 
 // History Dashboard Logs
 router.get('/logs', getMessageLogs);
