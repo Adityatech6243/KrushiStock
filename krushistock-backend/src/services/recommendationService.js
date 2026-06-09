@@ -178,7 +178,7 @@ const getFarmerRecommendations = async (farmerId) => {
           price: product.price,
           sellingPrice: product.sellingPrice,
           unit: product.unit,
-          quantity: stockMap.get(product._id.toString()) || 0,
+          quantity: stockMap.get(product._id.toString())?.quantity || 0,
           category: product.category,
           description: product.description,
           stockStatus: product.stockStatus
@@ -305,7 +305,7 @@ const getSeasonalRecommendations = async (season) => {
           price: product.price,
           sellingPrice: product.sellingPrice,
           unit: product.unit,
-          quantity: stockMap.get(product._id.toString()) || 0,
+          quantity: stockMap.get(product._id.toString())?.quantity || 0,
           category: product.category,
           description: product.description,
           stockStatus: product.stockStatus
@@ -356,7 +356,7 @@ const getCropRecommendations = async (cropName) => {
           price: product.price,
           sellingPrice: product.sellingPrice,
           unit: product.unit,
-          quantity: stockMap.get(product._id.toString()) || 0,
+          quantity: stockMap.get(product._id.toString())?.quantity || 0,
           category: product.category,
           description: product.description,
           stockStatus: product.stockStatus
