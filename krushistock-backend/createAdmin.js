@@ -11,7 +11,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const createAdminUser = async () => {
   try {
     if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 8) {
-      throw new Error('ADMIN_PASSWORD must be set and contain at least 8 characters');
+      console.log('Skipping admin user creation: ADMIN_PASSWORD environment variable is not set or is less than 8 characters.');
+      process.exit(0);
     }
 
     await mongoose.connect(MONGO_URI);
